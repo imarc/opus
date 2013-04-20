@@ -353,17 +353,24 @@
 					if (count($children) > 2) {
 						continue;
 					}
-				}
 
-				if (unlink($installation_path)) {
-					unset($this->installationMap[$path]);
+					if (!rmdir($installation_path)) {
+						throw new \Exception(sprintf(
+							'Error removing empty directory %s',
+							$path
+						));
+					}
 
 				} else {
-					throw new \Exception(sprintf(
-						'Error removing unused file or directory %s',
-						$path
-					));
+					if (!unlink($installation_path)) {
+						throw new \Exception(sprintf(
+							'Error removing unused file %s',
+							$path
+						));
+					}
 				}
+
+				unset($this->installationMap[$path]);
 			}
 		}
 
