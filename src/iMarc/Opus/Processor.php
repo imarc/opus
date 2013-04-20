@@ -21,15 +21,20 @@
 		const NAME         = 'opus';
 		const TAB          = '    ';
 
-
 		/**
+		 * The working installation map - tracks file copies
 		 *
+		 * @access private
+		 * @var array
 		 */
 		private $installationMap = array();
 
 
 		/**
+		 * The framework as defined by our extra options
 		 *
+		 * @access private
+		 * @var string
 		 */
 		private $framework = NULL;
 
@@ -59,9 +64,9 @@
 		/**
 		 * Initializes library installer.
 		 *
-		 * @param IOInterface $io
-		 * @param Composer $composer
-		 * @param string $type
+		 * @param IOInterface $io The input/output handler
+		 * @param Composer $composer The composer instance being run
+		 * @param string $type The type
 		 */
 		 public function __construct(IOInterface $io, Composer $composer, $type = 'library')
 		 {
@@ -85,7 +90,12 @@
 
 
 		/**
+		 * Installs a package
 		 *
+		 * @access public
+		 * @param InstalledRepositoryInterface $repo The repository for installed packages
+		 * @param PackageInterface $package The package to install
+		 * @return void
 		 */
 		public function install(InstalledRepositoryInterface $repo, PackageInterface $package)
 		{
@@ -116,7 +126,11 @@
 
 
 		/**
+		 * Determine's whether or not we support the package
 		 *
+		 * @access public
+		 * @param string $package_type The package type
+		 * @return boolean TRUE if we support the package, FALSE otherwise
 		 */
 		public function supports($package_type)
 		{
@@ -125,51 +139,77 @@
 
 
 		/**
+		 * Updates a package (removing unused files, adding new ones in)
 		 *
+		 * @access public
+		 * @param InstalledRepositoryInterface $repo The repository for installed packages
+		 * @param PackageInterface $initial The initial package (originally installed)
+		 * @param PackageInterface $target The target package (the new one)
+		 * @return void
 		 */
 		public function update(InstalledRepositoryInterface $repo, PackageInterface $initial, PackageInterface $target)
 		{
 			parent::update($repo, $initial, $target);
 
 			//
-			// Return immediately if we have no information relevant to our installer
+			// Don't attempt to remove anything if the initial package didn't have Opus support
 			//
 
-			if (!$this->checkFrameworkSupport($initial)) {
-				return;
-			}
+			if ($this->checkFrameworkSupport($initial)) {
+				$this->loadInstallationMap();
 
-			$this->loadInstallationMap();
+				$old_handled_packages = array_keys($this->buildPackageMap($initial));
 
-			$old_handled_packages = array_keys($this->buildPackageMap($initial));
-
-			foreach ($this->installationMap as $path => $current_package_names) {
-				$this->installationMap[$path] = array_diff(
-					$current_package_names,
-					$old_handled_packages
-				);
-			}
-
-			$this->cleanup();
-
-			$this->copyMap(
-				$this->buildPackageMap($target),
-				$conflicts
-			);
-
-			if (count($conflicts)) {
-				foreach ($conflicts as $a => $b) {
-					copy($a, $b);
+				foreach ($this->installationMap as $path => $current_package_names) {
+					$this->installationMap[$path] = array_diff(
+						$current_package_names,
+						$old_handled_packages
+					);
 				}
+
+				$this->cleanup();
+
+				$this->saveInstallationMap();
 			}
 
-			$this->saveInstallationMap();
+			//
+			// TODO: Currently updates just copy over files that conflict.  Installations do
+			// diffs because we don't want a package or a new package to overwrite something
+			// already handled by another or in the framework itself.  Update behavior should
+			// be configurable.  It might make sense to track which package a conflicting file
+			// is using and copy only if this is the same package.  It may also be useful to
+			// add hints for some files (like configuration files) that will diff in all cases.
+			// These are just some initial ideas, but for now this should be OK most likely.
+			//
+
+			if ($this->checkFrameworkSupport($target)) {
+				$this->loadInstallationMap();
+
+				$this->copyMap(
+					$this->buildPackageMap($target),
+					$conflicts
+				);
+
+				if (count($conflicts)) {
+					foreach ($conflicts as $a => $b) {
+						copy($a, $b);
+					}
+				}
+
+				$this->saveInstallationMap();
+			}
+
 			$this->io->write(PHP_EOL);
 		}
 
 
 		/**
+		 * Uninstalls a package
 		 *
+		 * @access public
+		 * @param InstalledRepositoryInterface $repo The repository for installed packages
+		 * @param PackageInterface $package The package to uninstall
+		 * @return void
 		 */
 		public function uninstall(InstalledRepositoryInterface $repo, PackageInterface $package)
 		{
@@ -191,7 +231,16 @@
 
 
 		/**
+		 * Builds a package map
 		 *
+		 * The package map is an array of packages to their installation sources and destinations.
+		 * This will resolve any globs for external integration packages.  An external integration
+		 * package *cannot* handle installation of a package it does not depend on, so it looks
+		 * through the requires to determine this.
+		 *
+		 * @access private
+		 * @param PackageInterface $package The package to build a map for
+		 * @return array The package map
 		 */
 		private function buildPackageMap($package)
 		{
@@ -250,7 +299,11 @@
 
 
 		/**
+		 * Checks whether or not our framework is supported by this opus package
 		 *
+		 * @access private
+		 * @param PackageInterface $package The package to build a map for
+		 * @return boolean TRUE if the package supports our framework, FALSE otherwise
 		 */
 		private function checkFrameworkSupport($package)
 		{
@@ -269,7 +322,10 @@
 
 
 		/**
+		 * Cleans up our map and installations, removing any files no longer mapped to packages
 		 *
+		 * @access private
+		 * @return void
 		 */
 		private function cleanup()
 		{
@@ -318,7 +374,7 @@
 		 * @access private
 		 * @param string $source The source directory
 		 * @param string|array $target The destination directory or a map of subdirs to destinations
-		 * @param string $entry Name the name for the entry in the installation map
+		 * @param string $entry_name The name for the entry in the installation map
 		 * @return array An array of conflicts
 		 */
 		private function copy($source, $target, $entry_name = NULL)
@@ -416,7 +472,12 @@
 
 
 		/**
+		 * Copies files over from a package map
 		 *
+		 * @access private
+		 * @param array $package_map A package map to lookup sources and destinations
+		 * @param array $conflicts A reference which will be loaded up with conflicts
+		 * @return void
 		 */
 		private function copyMap($package_map, &$conflicts = NULL)
 		{
@@ -446,7 +507,10 @@
 
 
 		/**
+		 * Loads the Opus installation map
 		 *
+		 * @access private
+		 * @return void
 		 */
 		private function loadInstallationMap()
 		{
@@ -511,7 +575,10 @@
 
 
 		/**
+		 * Saves the Opus installation map
 		 *
+		 * @access private
+		 * @return void
 		 */
 		private function saveInstallationMap()
 		{
