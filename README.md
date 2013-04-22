@@ -9,8 +9,17 @@ Opus uses integration packages which provide a simple map to copy files from sou
 ## Using Opus Packages in Your Framework/App
 
 - Merge the below JSON into your framework or application's `composer.json` file.
-- Replace the value of `extra.opus.options.framework` with the name of your framework or application.
 - Add integration packages as you normally would to the `require` object.
+
+```json
+	"extra": {
+		"opus": {
+			"enabled": true
+		}
+	}
+```
+
+Using the above alone, Opus will match the standard `name` value on your root package to determine which set of installation paths packages should use.  If your `name` value does not match a standard framework or if you've changed the package name for any reason, you can overload the framework name with something like the following:
 
 ```json
 	"extra": {
@@ -22,7 +31,9 @@ Opus uses integration packages which provide a simple map to copy files from sou
 	}
 ```
 
-## Creating Opus Package
+If the above information is set, Opus will use the value of `extra.opus.options.framework` instead of the `name` value on the package to match installation paths.
+
+## Creating an Opus Package
 
 You can add Opus support to your existing packages by adding the following JSON to their `composer.json` file, replacing fields in `<>` with the appropriate values.
 
@@ -42,11 +53,11 @@ You can add Opus support to your existing packages by adding the following JSON 
 	}
 ```
 
-When Opus is run, it will examine your packages for the `opus` object and determine if there is a matching framework object.  The framework name should match the `extra.opus.options.framework` value in your root package / framework / application's `composer.json`.  If this value matches, it will copy everything indicated by the source values on the left to the destination values on the right.  These can be entire folders or single files.
+When Opus is run, it will examine your root package's framework value (see above) and use the matching `"<source>": "<destination>"` mapping from the list provided.  Your package can support multiple frameworks simply by adding additional map object, keyed by the framework package name.  If no matching framework is found, no action will be taken.
 
 ## External Integration Packages
 
-An external integration package is a package which attempts to handle the Opus installation of multiple sub packages.  It does this by wrapping the `"<source>": "<destination">` mappings in an additional object whose key matches the package names they apply to.  It is additionally useful because you can glob package names.
+An external integration package is a package which attempts to handle the Opus installation of multiple sub packages.  It does this by wrapping the `"<source>": "<destination>"` mappings in an additional object whose key matches the package names they apply to.  It is additionally useful because you can glob package names.
 
 The diagram below shows an hypothetical integration package which provides code of it's own, but also requires asset files from a hypothetical frontend framework and a third-party library.  In addition to handling it's own Opus mappings it handles that of the asset package as well:
 
@@ -57,11 +68,13 @@ The diagram below shows an hypothetical integration package which provides code 
 ### Framework/App
 
 ```json
+"name": "<framework>",
 "extra": {
 	"opus": {
+		"enabled": true|false,               // Enable/Disable Opus
 		"options": {
-			"framework": "<framework>",      // name of the framework or application
-			"external-mapping": true|false   // whether or not to support external mapping
+			"framework": "<framework>",      // Override package name to specify a framework
+			"external-mapping": true|false   // Enable/Disable external integration packages
 		}
 	}
 }
@@ -76,11 +89,11 @@ The diagram below shows an hypothetical integration package which provides code 
 },
 "extra": {
 	"opus": {
-		"<framework>": {                     // framework object
-			"<source>": "<destination>",     // source => destination mapping
+		"<framework>": {                     // Framework object
+			"<source>": "<destination>",     // Mapping (for this package)
 			...
 		},
-		...                                  // Additional framework objects
+		...                                  // Additional Frameworks and Mappings
 	}
 }
 ```
@@ -94,14 +107,15 @@ The diagram below shows an hypothetical integration package which provides code 
 },
 "extra": {
 	"opus": {
-		"<framework>": {                     // framework object
-			"<package>": {                   // package object (can do glob matching)
-				"<source>": "<destination>", // source => destination mapping
+		"<framework>": {                     // Framework object
+			"<source>": "<destination>",     // Mapping (for this package)
+			"<package>": {                   // External Package Mapping object
+				"<source>": "<destination>", // Mapping
 				...
 			},
 			...
 		},
-		...                                  // Additional framework objects
+		...                                  // Additional Frameworks and Package Mappings
 	}
 }
 ```

@@ -32,12 +32,30 @@ class Processor extends LibraryInstaller
 
 
 	/**
+	 * Whether or not opus support is enabled
+	 *
+	 * @access private
+	 * @var boolean
+	 */
+	private $enabled = FALSE;
+
+
+	/**
 	 * The framework as defined by our extra options
 	 *
 	 * @access private
 	 * @var string
 	 */
 	private $framework = NULL;
+
+
+	/**
+	 * The map file we read/write from/to
+	 *
+	 * @access private
+	 * @var string
+	 */
+	private $mapFile = NULL;
 
 
 	/**
@@ -77,17 +95,31 @@ class Processor extends LibraryInstaller
 		// We can now parse our 'extra' configuration key for all our related information.
 		//
 
-		$extra           = $this->composer->getPackage()->getExtra();
-		$this->framework = $extra[self::NAME]['options']['framework'];
+		$extra         = $this->composer->getPackage()->getExtra();
+		$this->mapFile = getcwd() . DIRECTORY_SEPARATOR . self::NAME . '.map';
 
-		if (isset($extra[self::NAME]['options']['external-mapping'])) {
-			$this->externalMapping = (bool) $extra[self::NAME]['options']['external-mapping'];
+		$this->externalMapping = isset($extra[self::NAME]['options']['external-mapping'])
+			? (bool) $extra[self::NAME]['options']['external-mapping']
+			: FALSE;
+
+		if (isset($extra[self::NAME]['options']['framework'])) {
+			$this->framework = $extra[self::NAME]['options']['framework'];
+
+			//
+			// Previous versions were noted as enabled if they set a framework.  This will
+			// re-establish that, but will get overloaded later if enabled is explicitly set.
+			//
+
+			$this->enabled = TRUE;
+
 		} else {
-			$this->externalMapping = FALSE;
+			$this->framework = $composer->getPackage()->getName();
 		}
 
-		$this->mapFile = getcwd() . DIRECTORY_SEPARATOR . self::NAME . '.map';
-	 }
+		if (isset($extra[self::NAME]['enabled'])) {
+			$this->enabled = $extra[self::NAME]['enabled'];
+		}
+	}
 
 
 	/**
@@ -216,6 +248,14 @@ class Processor extends LibraryInstaller
 	{
 		parent::uninstall($repo, $package);
 
+		//
+		// Return immediately if we have no information relevant to our installer
+		//
+
+		if (!$this->checkFrameworkSupport($package)) {
+			return;
+		}
+
 		$this->loadInstallationMap();
 
 		foreach ($this->installationMap as $path => $packages) {
@@ -318,7 +358,7 @@ class Processor extends LibraryInstaller
 			return FALSE;
 		}
 
-		return TRUE;
+		return $this->enabled;
 	}
 
 
