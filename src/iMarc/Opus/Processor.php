@@ -95,25 +95,26 @@ class Processor extends LibraryInstaller
 		// We can now parse our 'extra' configuration key for all our related information.
 		//
 
-		$extra         = $this->composer->getPackage()->getExtra();
-		$this->mapFile = getcwd() . DIRECTORY_SEPARATOR . self::NAME . '.map';
+		$extra           = $this->composer->getPackage()->getExtra();
+		$this->mapFile   = getcwd() . DIRECTORY_SEPARATOR . self::NAME . '.map';
+		$this->framework = $composer->getPackage()->getName();
 
-		$this->externalMapping = isset($extra[self::NAME]['options']['external-mapping'])
-			? (bool) $extra[self::NAME]['options']['external-mapping']
-			: FALSE;
+		if (isset($extra[self::NAME]['options'])) {
+			$options               = $extra[self::NAME]['options'];
+			$this->externalMapping = isset($options['external-mapping'])
+				? (bool) $options['external-mapping']
+				: FALSE;
 
-		if (isset($extra[self::NAME]['options']['framework'])) {
-			$this->framework = $extra[self::NAME]['options']['framework'];
+			if (isset($options['framework'])) {
+				$this->framework = $options['framework'];
 
-			//
-			// Previous versions were noted as enabled if they set a framework.  This will
-			// re-establish that, but will get overloaded later if enabled is explicitly set.
-			//
+				//
+				// Previous versions were noted as enabled if they set a framework.  This will
+				// re-establish that, but will get overloaded later if enabled is explicitly set.
+				//
 
-			$this->enabled = TRUE;
-
-		} else {
-			$this->framework = $composer->getPackage()->getName();
+				$this->enabled = TRUE;
+			}
 		}
 
 		if (isset($extra[self::NAME]['enabled'])) {
