@@ -1,8 +1,6 @@
 <?php
 namespace iMarc\Opus;
 
-use Diff;
-use Diff_Renderer_Text_Unified;
 use Composer\Composer;
 use Composer\IO\IOInterface;
 use Composer\Installer\LibraryInstaller;
@@ -71,12 +69,12 @@ class Processor extends LibraryInstaller
 	{
 		$a_code = explode("\n", file_get_contents($a));
 		$b_code = explode("\n", file_get_contents($b));
-		$diff   = new Diff($b_code, $a_code, array(
+		$diff   = new \Diff($b_code, $a_code, array(
 			'ignoreWhitespace' => TRUE,
 			'ignoreNewLines'   => TRUE
 		));
 
-		return $diff->render(new Diff_Renderer_Text_Unified());
+		return $diff->render(new \Diff_Renderer_Text_Unified());
 	}
 
 
