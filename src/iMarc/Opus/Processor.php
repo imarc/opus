@@ -446,7 +446,7 @@ class Processor extends LibraryInstaller
 					continue;
 				}
 
-				if (!rmdir($installation_path)) {
+				if (!@rmdir($installation_path)) {
 					switch ($this->integrity) {
 						case 'low':
 							break;
@@ -467,7 +467,7 @@ class Processor extends LibraryInstaller
 				}
 
 			} else {
-				if (!unlink($installation_path)) {
+				if (!@unlink($installation_path)) {
 					switch ($this->integrity) {
 						case 'low':
 							break;
@@ -489,10 +489,7 @@ class Processor extends LibraryInstaller
 			}
 
 			unset($this->installationMap[$path]);
-
-			if (isset($this->installationMap['__CHECKSUMS__'][$path])) {
-				unset($this->installationMap['__CHECKSUMS__']);
-			}
+			unset($this->installationMap['__CHECKSUMS__']);
 		}
 	}
 
