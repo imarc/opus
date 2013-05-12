@@ -96,6 +96,7 @@ class Processor extends LibraryInstaller
 		$extra           = $this->composer->getPackage()->getExtra();
 		$this->mapFile   = getcwd() . DIRECTORY_SEPARATOR . self::NAME . '.map';
 		$this->framework = $composer->getPackage()->getName();
+		$this->integrity = 'medium';
 
 		if (isset($extra[self::NAME]['options'])) {
 			$options               = $extra[self::NAME]['options'];
@@ -112,6 +113,14 @@ class Processor extends LibraryInstaller
 				//
 
 				$this->enabled = TRUE;
+			}
+
+			if (isset($options['integrity'])) {
+				$options['integrity'] = strtolower($options['integrity']);
+				$valid_levels         = array('low', 'medium', 'high');
+				$this->integrity      = in_array($options['integrity'], $valid_levels)
+					? $options['integrity']
+					: 'medium';
 			}
 		}
 
@@ -152,7 +161,7 @@ class Processor extends LibraryInstaller
 			$this->resolve($conflicts);
 		}
 
-		$this->saveInstallationMap();
+		$this->saveInstallationMap(array());
 		$this->io->write(PHP_EOL);
 	}
 
@@ -184,7 +193,13 @@ class Processor extends LibraryInstaller
 		parent::update($repo, $initial, $target);
 
 		//
-		// Don't attempt to remove anything if the initial package didn't have Opus support
+		// Don't attempt to remove anything if the initial package didn't have Opus support.
+		// If it did, however, we will iterate through the installation map and remove package
+		// names which the old package handled installation for.
+		//
+		// We will then save the installation map without writing checksums, so that some paths
+		// may be completely empty arrays (i.e. have no packages handling them) and so that the
+		// checksums are still the original file checksums.
 		//
 
 		if ($this->checkFrameworkSupport($initial)) {
@@ -199,19 +214,16 @@ class Processor extends LibraryInstaller
 				);
 			}
 
-			$this->cleanup();
-
-			$this->saveInstallationMap();
+			$this->saveInstallationMap(TRUE);
 		}
 
 		//
-		// TODO: Currently updates just copy over files that conflict.  Installations do
-		// diffs because we don't want a package or a new package to overwrite something
-		// already handled by another or in the framework itself.  Update behavior should
-		// be configurable.  It might make sense to track which package a conflicting file
-		// is using and copy only if this is the same package.  It may also be useful to
-		// add hints for some files (like configuration files) that will diff in all cases.
-		// These are just some initial ideas, but for now this should be OK most likely.
+		// At this point, if the new package supports opus it wil redo-copying and re-add itself
+		// to the paths it handles.  This will leave any files it no longer handles with empty
+		// arrays from previous action.  In the event of a conflict, the checksum of the
+		// destination file will be checked against the original checksums in the installation
+		// map and the user will be prompted with additional actions based on their integrity
+		// level.
 		//
 
 		if ($this->checkFrameworkSupport($target)) {
@@ -222,14 +234,54 @@ class Processor extends LibraryInstaller
 				$conflicts
 			);
 
+			$excluded_checksums = array();
+
 			if (count($conflicts)) {
+				$original_checksums = isset($this->installationMap['__CHECKSUMS__'])
+					? $this->installationMap['__CHECKSUMS__']
+					: array();
+
 				foreach ($conflicts as $a => $b) {
-					copy($a, $b);
+					$destination_path  = str_replace(getcwd(), '', $b);
+					$current_checksum  = md5(file_get_contents($b));
+
+					$has_changed = isset($original_checksums[$destination_path])
+						? $original_checksums[$destination_path] != $current_checksum
+						: FALSE;
+
+					switch ($this->integrity) {
+						case 'low':
+							copy ($a, $b);
+							break;
+
+						case 'medium':
+							if (!$has_changed) {
+								copy($a, $b);
+
+							} elseif (!$this->resolve(array($a => $b))) {
+								$excluded_checksums[] = str_replace(getcwd(), '', $b);
+							}
+							break;
+
+						case 'high':
+							if (!$this->resolve(array($a => $b))) {
+								$excluded_checksums[] = str_replace(getcwd(), '', $b);
+							}
+							break;
+					}
 				}
 			}
 
-			$this->saveInstallationMap();
+			$this->saveInstallationMap($excluded_checksums);
 		}
+
+		//
+		// Lastly, when the remove package has been removed from the installation map and the
+		// new package has re-added itself for any files it handles, we will run cleanup.  This
+		// will actually remove any unhandled files and directories.
+		//
+
+		$this->cleanup();
 
 		$this->io->write(PHP_EOL);
 	}
@@ -264,7 +316,7 @@ class Processor extends LibraryInstaller
 		}
 
 		$this->cleanup();
-		$this->saveInstallationMap();
+		$this->saveInstallationMap(TRUE);
 
 		parent::uninstall($repo, $package);
 	}
@@ -370,7 +422,7 @@ class Processor extends LibraryInstaller
 	private function cleanup()
 	{
 		foreach ($this->installationMap as $path => $packages) {
-			if (count($packages)) {
+			if ($path == '__CHECKSUMS__' || count($packages)) {
 				continue;
 			}
 
@@ -395,22 +447,52 @@ class Processor extends LibraryInstaller
 				}
 
 				if (!rmdir($installation_path)) {
-					throw new \Exception(sprintf(
-						'Error removing empty directory %s',
-						$path
-					));
+					switch ($this->integrity) {
+						case 'low':
+							break;
+
+						case 'medium':
+							$this->io->write(sprintf(
+								self::TAB . 'Warning: unable to remove empty directory %s',
+								$path
+							));
+							break;
+
+						case 'high':
+							throw new \Exception(sprintf(
+								'Error removing empty directory %s',
+								$path
+							));
+					}
 				}
 
 			} else {
 				if (!unlink($installation_path)) {
-					throw new \Exception(sprintf(
-						'Error removing unused file %s',
-						$path
-					));
+					switch ($this->integrity) {
+						case 'low':
+							break;
+
+						case 'medium':
+							$this->io->write(sprintf(
+								self::TAB . 'Warning: unable to remove unused file %s',
+								$path
+							));
+							break;
+
+						case 'high':
+							throw new \Exception(sprintf(
+								'Error removing unused file %s',
+								$path
+							));
+					}
 				}
 			}
 
 			unset($this->installationMap[$path]);
+
+			if (isset($this->installationMap['__CHECKSUMS__'][$path])) {
+				unset($this->installationMap['__CHECKSUMS__']);
+			}
 		}
 	}
 
@@ -431,7 +513,7 @@ class Processor extends LibraryInstaller
 		if (is_array($target)) {
 			foreach ($target[$entry_name] as $sub_directory => $destination) {
 				$sub_directory = trim($sub_directory, '/\\' . DIRECTORY_SEPARATOR);
-				$destination   = trim($destination, '/\\' . DIRECTORY_SEPARATOR);
+				$destination   = trim($destination,   '/\\' . DIRECTORY_SEPARATOR);
 
 				$conflicts = array_merge(
 					$this->copy(
@@ -447,9 +529,9 @@ class Processor extends LibraryInstaller
 		}
 
 		foreach (glob($source . DIRECTORY_SEPARATOR . '*') as $path) {
-
 			$parts       = explode(DIRECTORY_SEPARATOR, $path);
 			$item        = array_pop($parts);
+			$target      = rtrim($target, '/\\' . DIRECTORY_SEPARATOR);
 			$destination = $target . DIRECTORY_SEPARATOR . $item;
 
 			//
@@ -467,7 +549,7 @@ class Processor extends LibraryInstaller
 						));
 					}
 
-				} elseif (!mkdir($destination)) {
+				} elseif (!@mkdir($destination)) {
 					throw new \Exception(sprintf(
 						'Cannot install, unable to create directory at %s',
 						$destination
@@ -534,7 +616,7 @@ class Processor extends LibraryInstaller
 
 		foreach ($packages as $package) {
 			$package_name = $package->getName();
-			$package_root = $this->getInstallPath($package);
+			$package_root = rtrim($this->getInstallPath($package), '/\\' . DIRECTORY_SEPARATOR);
 
 			if (!isset($package_map[$package_name])) {
 				continue;
@@ -586,7 +668,7 @@ class Processor extends LibraryInstaller
 	 *
 	 * @access private
 	 * @param array $conflicts A list of conflicts $source => $destination
-	 * @return void
+	 * @return boolean TRUE if the user overwrite with the new version, FALSE otherwise
 	 */
 	private function resolve($conflicts)
 	{
@@ -606,9 +688,9 @@ class Processor extends LibraryInstaller
 				switch(strtolower($answer[0])) {
 					case 'o':
 						copy($a, $b);
-						break;
+						return TRUE;
 					case 'k':
-						break;
+						return FALSE;
 					case 'd':
 						$this->io->write(PHP_EOL . self::diff($a, $b) . PHP_EOL);
 						break;
@@ -627,8 +709,25 @@ class Processor extends LibraryInstaller
 	 * @access private
 	 * @return void
 	 */
-	private function saveInstallationMap()
+	private function saveInstallationMap($excluded_checksums = array())
 	{
+		//
+		// Temporarily remove original checksums
+		//
+
+		if (isset($this->installationMap['__CHECKSUMS__'])) {
+			$original_checksums = $this->installationMap['__CHECKSUMS__'];
+
+			unset($this->installationMap['__CHECKSUMS__']);
+
+		} else {
+			$original_checksums = array();
+		}
+
+		//
+		// Sort our paths by length
+		//
+
 		uksort($this->installationMap, function($a, $b) {
 			if (strlen($a) == strlen($b)) {
 				return 0;
@@ -641,6 +740,30 @@ class Processor extends LibraryInstaller
 			return 1;
 		});
 
+		//
+		// Re-generate checksums or add original back in
+		//
+
+		if ($excluded_checksums !== TRUE) {
+			foreach ($this->installationMap as $path => $packages) {
+				if (!count($packages)) {
+					continue;
+				}
+
+				$checksum = !in_array($path, $excluded_checksums)
+					? md5(file_get_contents(getcwd() . DIRECTORY_SEPARATOR . $path))
+					: $original_checksums[$path];
+
+				$this->installationMap['__CHECKSUMS__'][$path] = $checksum;
+			}
+
+		} else {
+			$this->installationMap['__CHECKSUMS__'] = $original_checksums;
+		}
+
+		//
+		// Write our map
+		//
 
 		if (file_exists($this->mapFile)) {
 			if (!is_writable($this->mapFile) || is_dir($this->mapFile)) {
