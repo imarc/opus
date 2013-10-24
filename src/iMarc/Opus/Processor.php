@@ -56,6 +56,9 @@ class Processor extends LibraryInstaller
 	private $mapFile = NULL;
 
 
+	static private $separators = ['\\', '/', DIRECTORY_SEPARATOR];
+
+
 	/**
 	 * Get the difference between two files
 	 *
@@ -297,8 +300,6 @@ class Processor extends LibraryInstaller
 	 */
 	public function uninstall(InstalledRepositoryInterface $repo, PackageInterface $package)
 	{
-		parent::uninstall($repo, $package);
-
 		//
 		// Return immediately if we have no information relevant to our installer
 		//
@@ -498,99 +499,92 @@ class Processor extends LibraryInstaller
 	 * Copies a source directory to a destination directory
 	 *
 	 * @access private
-	 * @param string $source The source directory
-	 * @param string|array $target The destination directory or a map of subdirs to destinations
+	 * @param string $source The source file/directory
+	 * @param string|array $destination The destination file/directory
 	 * @param string $entry_name The name for the entry in the installation map
 	 * @return array An array of conflicts
 	 */
-	private function copy($source, $target, $entry_name = NULL)
+	private function copy($source, $dest, $entry_name = NULL)
 	{
-		$conflicts = array();
+		$conflicts   = array();
+		$source      = rtrim(realpath($source), '/\\' . DIRECTORY_SEPARATOR);
 
-		if (is_array($target)) {
-			foreach ($target[$entry_name] as $sub_directory => $destination) {
-				$sub_directory = trim($sub_directory, '/\\' . DIRECTORY_SEPARATOR);
-				$destination   = trim($destination,   '/\\' . DIRECTORY_SEPARATOR);
+		if (!$source) {
+			throw new \Exception(sprintf(
+				'Cannot install, bad source entry while trying to install %s',
+				$entry_name
+			));
+		}
 
+		if (is_file($source)) {
+			if (in_array($dest[strlen($dest - 1)], self::$separators) || is_dir($dest)) {
+				$target_dir = rtrim($dest, '/\\' . DIRECTORY_SEPARATOR);
+				$file_name  = pathinfo($source, PATHINFO_BASENAME);
+			} else {
+				$target_dir = pathinfo($dest, PATHINFO_DIRNAME);
+				$file_name  = pathinfo($dest, PATHINFO_BASENAME);
+			}
+
+			$this->createDirectory($target_dir, $entry_name);
+
+			$conflict = FALSE;
+			$dest     = $target_dir . DIRECTORY_SEPARATOR . $file_name;
+
+			if (file_exists($dest)) {
+				if (!is_writable($dest)) {
+					throw new \Exception(sprintf(
+						'Cannot install, cannot write to file at "%s"',
+						$dest
+					));
+				}
+
+				$a = preg_replace('/\s/', '', file_get_contents($source));
+				$b = preg_replace('/\s/', '', file_get_contents($dest));
+
+				if ($a !== $b) {
+					$conflict         = TRUE;
+					$conflicts[$source] = $destination;
+				}
+			}
+
+			if (!$conflict) {
+				copy($source, $dest);
+				$this->map($dest, $entry_name);
+			}
+
+		} elseif (is_dir($source)) {
+			if (is_file($dest)) {
+				throw new \Exception(sprintf(
+					'Cannot copy source "%s" (directory) to "%s" (file)',
+					$source,
+					$dest
+				));
+			}
+
+			$target_dir = rtrim($dest, '/\\' . DIRECTORY_SEPARATOR);
+
+			if (in_array($dest[strlen($dest - 1)], self::$separators)) {
+				$target_dir .= DIRECTORY_SEPARATOR . pathinfo($source, PATHINFO_BASENAME);
+			}
+
+			$this->createDirectory($target_dir, $entry_name);
+
+			foreach (glob($source . DIRECTORY_SEPARATOR . '*') as $path) {
 				$conflicts = array_merge(
 					$this->copy(
-						$source  . DIRECTORY_SEPARATOR . $sub_directory,
-						getcwd() . DIRECTORY_SEPARATOR . $destination,
+						realpath($path),
+						$target_dir . DIRECTORY_SEPARATOR . pathinfo($path, PATHINFO_BASENAME),
 						$entry_name
 					),
 					$conflicts
 				);
 			}
 
-			return $conflicts;
-		}
-
-		foreach (glob($source . DIRECTORY_SEPARATOR . '*') as $path) {
-			$parts       = explode(DIRECTORY_SEPARATOR, $path);
-			$item        = array_pop($parts);
-			$target      = rtrim($target, '/\\' . DIRECTORY_SEPARATOR);
-			$destination = $target . DIRECTORY_SEPARATOR . $item;
-
-			//
-			// Once we have the target name, we want to normalize our path
-			//
-
-			$path = realpath($path);
-
-			if (is_dir($path)) {
-				if (file_exists($destination)) {
-					if (!is_dir($destination)) {
-						throw new \Exception(sprintf(
-							'Cannot install, conflicting file at %s; should be a directory.',
-							$destination
-						));
-					}
-
-				} elseif (!@mkdir($destination)) {
-					throw new \Exception(sprintf(
-						'Cannot install, unable to create directory at %s',
-						$destination
-					));
-				}
-
-				$conflicts = array_merge(
-					$this->copy($path, $destination, $entry_name),
-					$conflicts
-				);
-
-			} elseif (is_file($path)) {
-
-				$conflict = FALSE;
-
-				if (file_exists($destination)) {
-					if (!is_file($destination)) {
-						throw new \Exception(sprintf(
-							'Cannot install, conflicting directory at %s; should be a file.',
-							$destination
-						));
-					}
-
-					$a = preg_replace('/\s/', '', file_get_contents($path));
-					$b = preg_replace('/\s/', '', file_get_contents($destination));
-
-					if ($a !== $b) {
-						$conflict         = TRUE;
-						$conflicts[$path] = $destination;
-					}
-				}
-
-				if (!$conflict) {
-					copy($path, $destination);
-				}
-			}
-
-			$relative_path = str_replace(getcwd(), '', $destination);
-
-			if (!isset($this->installationMap[$relative_path])) {
-				$this->installationMap[$relative_path] = array();
-			}
-
-			$this->installationMap[$relative_path][] = $entry_name;
+		} else {
+			throw new \Exception(sprintf(
+				'Cannot copy source "%s", not readable or not a normal file or directory',
+				$source
+			));
 		}
 
 		return $conflicts;
@@ -624,10 +618,66 @@ class Processor extends LibraryInstaller
 				substr($package_root, strlen(getcwd()))
 			));
 
-			$conflicts = array_merge(
-				$this->copy($package_root, $package_map, $package_name),
-				$conflicts
+			foreach ($package_map[$package_name] as $source => $dest) {
+				$source    = trim($source, '/\\' . DIRECTORY_SEPARATOR);
+				$dest      = ltrim($dest,   '/\\' . DIRECTORY_SEPARATOR);
+				$conflicts = array_merge(
+					$this->copy(
+						$package_root . DIRECTORY_SEPARATOR . $source,
+						getcwd() . DIRECTORY_SEPARATOR . $dest,
+						$package_name
+					),
+					$conflicts
+				);
+			}
+		}
+	}
+
+
+	/**
+	 * Attempts to create a directory and make sure it's writable while mapping
+	 * any created directories.
+	 *
+	 * @param string $directory The directory to try and create
+	 * @param string $entry_name The entry name to map under
+	 * @return void
+	 */
+	private function createDirectory($directory, $entry_name = NULL)
+	{
+		$directory = str_replace(DIRECTORY_SEPARATOR, '/', $directory);
+		$directory = str_replace('\\', '/', $directory);
+		$directory = str_replace('/',  '/', $directory);
+		$directory = rtrim($directory, '/\\' . DIRECTORY_SEPARATOR);
+
+		if (!file_exists($directory)) {
+			$this->createDirectory(
+				pathinfo($directory, PATHINFO_DIRNAME),
+				$entry_name
 			);
+
+			if (!mkdir($directory)) {
+				throw new \Exception(sprintf(
+					'Cannot install, failure while creating requisite directory "%s"',
+					$directory
+				));
+			}
+
+			$this->map($directory, $entry_name);
+
+		} else {
+			if (!is_dir($directory)) {
+				throw new \Exception(sprintf(
+					'Cannot install, requisite path "%s" exists, but is not a directory',
+					$directory
+				));
+			}
+
+			if (!is_writable($directory)) {
+				throw new \Exception(sprintf(
+					'Cannot install, requisite directory "%s" is not writable',
+					$directory
+				));
+			}
 		}
 	}
 
@@ -657,6 +707,28 @@ class Processor extends LibraryInstaller
 				));
 			}
 		}
+	}
+
+
+	/**
+	 * Maps a destination under a given entry name
+	 *
+	 * The destination is taken relative to the current working directory
+	 *
+	 * @access private
+	 * @param string $dest The Destination to map
+	 * @param string $entry_name The entry name to map under
+	 * @return void
+	 */
+	private function map($dest, $entry_name)
+	{
+		$relative_path = str_replace(getcwd(), '', $dest);
+
+		if (!isset($this->installationMap[$relative_path])) {
+			$this->installationMap[$relative_path] = array();
+		}
+
+		$this->installationMap[$relative_path][] = $entry_name;
 	}
 
 
