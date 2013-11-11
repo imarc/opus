@@ -542,8 +542,8 @@ class Processor extends LibraryInstaller
 				$b = preg_replace('/\s/', '', file_get_contents($dest));
 
 				if ($a !== $b) {
-					$conflict         = TRUE;
-					$conflicts[$source] = $destination;
+					$conflict           = TRUE;
+					$conflicts[$source] = $dest;
 				}
 			}
 
