@@ -489,8 +489,8 @@ class Processor extends LibraryInstaller
 				}
 			}
 
-			@unset($this->installationMap[$path]);
-			@unset($this->installationMap['__CHECKSUMS__'][$path]);
+			unset($this->installationMap[$path]);
+			unset($this->installationMap['__CHECKSUMS__'][$path]);
 		}
 	}
 
