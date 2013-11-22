@@ -550,8 +550,9 @@ class Processor extends LibraryInstaller
 
 			if (!$conflict) {
 				copy($source, $dest);
-				$this->map($dest, $entry_name);
 			}
+
+			$this->map($dest, $entry_name);
 
 		} elseif (is_dir($source)) {
 			if (is_file($dest)) {
@@ -727,9 +728,13 @@ class Processor extends LibraryInstaller
 
 		if (!isset($this->installationMap[$relative_path])) {
 			$this->installationMap[$relative_path] = array();
+		} elseif (!in_array($entry_name, $this->installationMap[$relative_path])) {
+			$this->installationMap[$relative_path][] = $entry_name;
+		} else {
+			//
+			// It's already mapped, what more do you want?
+			//
 		}
-
-		$this->installationMap[$relative_path][] = $entry_name;
 	}
 
 
