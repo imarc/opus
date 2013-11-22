@@ -539,8 +539,8 @@ class Processor extends LibraryInstaller
 					));
 				}
 
-				$a = preg_replace('/\s/', '', file_get_contents($source));
-				$b = preg_replace('/\s/', '', file_get_contents($dest));
+				$a = md5(preg_replace('/\s/', '', file_get_contents($source)));
+				$b = md5(preg_replace('/\s/', '', file_get_contents($dest)));
 
 				if ($a !== $b) {
 					$conflict           = TRUE;
@@ -663,8 +663,6 @@ class Processor extends LibraryInstaller
 				));
 			}
 
-			$this->map($directory, $entry_name);
-
 		} else {
 			if (!is_dir($directory)) {
 				throw new \Exception(sprintf(
@@ -680,6 +678,8 @@ class Processor extends LibraryInstaller
 				));
 			}
 		}
+
+		$this->map($directory, $entry_name);
 	}
 
 
