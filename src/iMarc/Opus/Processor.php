@@ -221,7 +221,7 @@ class Processor extends LibraryInstaller
 		}
 
 		//
-		// At this point, if the new package supports opus it wil redo-copying and re-add itself
+		// At this point, if the new package supports opus it will redo-copying and re-add itself
 		// to the paths it handles.  This will leave any files it no longer handles with empty
 		// arrays from previous action.  In the event of a conflict, the checksum of the
 		// destination file will be checked against the original checksums in the installation
@@ -285,6 +285,7 @@ class Processor extends LibraryInstaller
 		//
 
 		$this->cleanup();
+		$this->saveInstallationMap(TRUE);
 
 		$this->io->write(PHP_EOL);
 	}
