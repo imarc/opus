@@ -237,7 +237,7 @@ class Processor extends LibraryInstaller
 				$conflicts
 			);
 
-			$excluded_checksums = array();
+			$check_excluded_files = array();
 
 			if (count($conflicts)) {
 				$original_checksums = isset($this->installationMap['__CHECKSUMS__'])
@@ -262,20 +262,20 @@ class Processor extends LibraryInstaller
 								copy($a, $b);
 
 							} elseif (!$this->resolve(array($a => $b))) {
-								$excluded_checksums[] = str_replace(getcwd(), '', $b);
+								$check_excluded_files[] = $destination_path;
 							}
 							break;
 
 						case 'high':
 							if (!$this->resolve(array($a => $b))) {
-								$excluded_checksums[] = str_replace(getcwd(), '', $b);
+								$check_excluded_files[] = $destination_path;
 							}
 							break;
 					}
 				}
 			}
 
-			$this->saveInstallationMap($excluded_checksums);
+			$this->saveInstallationMap($check_excluded_files);
 		}
 
 		//
@@ -432,6 +432,11 @@ class Processor extends LibraryInstaller
 			$installation_path = getcwd() . DIRECTORY_SEPARATOR . $installation_path;
 
 			if (is_dir($installation_path)) {
+
+				//
+				// Here's what to do with a directory
+				//
+
 				$children = array_merge(
 					glob($installation_path . DIRECTORY_SEPARATOR . '/*'),
 					glob($installation_path . DIRECTORY_SEPARATOR . '/.*')
@@ -441,7 +446,7 @@ class Processor extends LibraryInstaller
 				// Children should be at least two (one entry for current dir and another)
 				// for parent dir.  Our install map is sorted by the length of the path
 				// so we should only be trying to remove directories which have already had
-				// other tails related/created children removed.
+				// other opus related/created children removed.
 				//
 
 				if (count($children) > 2) {
@@ -469,6 +474,11 @@ class Processor extends LibraryInstaller
 				}
 
 			} else {
+
+				//
+				// Here's what to do with a file
+				//
+
 				if (!@unlink($installation_path)) {
 					switch ($this->integrity) {
 						case 'low':
@@ -621,7 +631,7 @@ class Processor extends LibraryInstaller
 			));
 
 			foreach ($package_map[$package_name] as $source => $dest) {
-				$source    = trim($source, '/\\' . DIRECTORY_SEPARATOR);
+				$source    = trim($source,  '/\\' . DIRECTORY_SEPARATOR);
 				$dest      = ltrim($dest,   '/\\' . DIRECTORY_SEPARATOR);
 				$conflicts = array_merge(
 					$this->copy(
@@ -728,7 +738,9 @@ class Processor extends LibraryInstaller
 
 		if (!isset($this->installationMap[$relative_path])) {
 			$this->installationMap[$relative_path] = array();
-		} elseif (!in_array($entry_name, $this->installationMap[$relative_path])) {
+		}
+
+		if (!in_array($entry_name, $this->installationMap[$relative_path])) {
 			$this->installationMap[$relative_path][] = $entry_name;
 		} else {
 			//
