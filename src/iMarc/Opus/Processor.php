@@ -486,14 +486,14 @@ class Processor extends LibraryInstaller
 
 						case 'medium':
 							$this->io->write(sprintf(
-								self::TAB . 'Warning: unable to remove unused file %s',
+								self::TAB . 'Warning: unable to remove unused file %s; remove manually',
 								$path
 							));
 							break;
 
 						case 'high':
 							throw new \Exception(sprintf(
-								'Error removing unused file %s',
+								'Error removing unused file %s, restore file or check permissions and try again',
 								$path
 							));
 					}
@@ -793,10 +793,15 @@ class Processor extends LibraryInstaller
 	/**
 	 * Saves the Opus installation map
 	 *
+	 * You can limit how checksum recalulation is handled by passing an array of files to
+	 * exclude calculations on, or by passing TRUE, which indicates that all old checksums
+	 * should be maintained.
+	 *
 	 * @access private
+	 * @param $check_excluded_files An array of files to exclude from hash calcs
 	 * @return void
 	 */
-	private function saveInstallationMap($excluded_checksums = array())
+	private function saveInstallationMap($check_excluded_files = array())
 	{
 		//
 		// Temporarily remove original checksums
@@ -831,13 +836,9 @@ class Processor extends LibraryInstaller
 		// Re-generate checksums or add original back in
 		//
 
-		if ($excluded_checksums !== TRUE) {
+		if ($check_excluded_files !== TRUE) {
 			foreach ($this->installationMap as $path => $packages) {
-				if (!count($packages)) {
-					continue;
-				}
-
-				$checksum = !in_array($path, $excluded_checksums)
+				$checksum = !in_array($path, $check_excluded_files)
 					? md5(file_get_contents(getcwd() . DIRECTORY_SEPARATOR . $path))
 					: $original_checksums[$path];
 
