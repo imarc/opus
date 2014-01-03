@@ -245,7 +245,7 @@ class Processor extends LibraryInstaller
 					: array();
 
 				foreach ($conflicts as $a => $b) {
-					$current_directory = str_replace(DIRECTORY_SEPARATOR, '/', $b)
+					$current_directory = str_replace(DIRECTORY_SEPARATOR, '/', $b);
 					$destination_path  = str_replace($current_directory, '', $b);
 					$current_checksum  = md5(file_get_contents($b));
 
