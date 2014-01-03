@@ -245,7 +245,8 @@ class Processor extends LibraryInstaller
 					: array();
 
 				foreach ($conflicts as $a => $b) {
-					$destination_path  = str_replace(getcwd(), '', $b);
+					$current_directory = str_replace(DIRECTORY_SEPARATOR, '/', $b)
+					$destination_path  = str_replace($current_directory, '', $b);
 					$current_checksum  = md5(file_get_contents($b));
 
 					$has_changed = isset($original_checksums[$destination_path])
@@ -734,8 +735,8 @@ class Processor extends LibraryInstaller
 	 */
 	private function map($dest, $entry_name)
 	{
-		$current_dir   = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
-		$relative_path = str_replace($current_dir, '', $dest);
+		$current_directory = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
+		$relative_path     = str_replace($current_directory, '', $dest);
 
 		if (!isset($this->installationMap[$relative_path])) {
 			$this->installationMap[$relative_path] = array();
