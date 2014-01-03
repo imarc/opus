@@ -575,7 +575,7 @@ class Processor extends LibraryInstaller
 
 			$target_dir = rtrim($dest, '/\\' . DIRECTORY_SEPARATOR);
 
-			if (in_array($dest[strlen($dest - 1)], self::$separators)) {
+			if (in_array($dest[strlen($dest) -1], self::$separators)) {
 				$target_dir .= DIRECTORY_SEPARATOR . pathinfo($source, PATHINFO_BASENAME);
 			}
 
@@ -734,7 +734,8 @@ class Processor extends LibraryInstaller
 	 */
 	private function map($dest, $entry_name)
 	{
-		$relative_path = str_replace(getcwd(), '', $dest);
+		$current_dir   = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
+		$relative_path = str_replace($current_dir, '', $dest);
 
 		if (!isset($this->installationMap[$relative_path])) {
 			$this->installationMap[$relative_path] = array();
@@ -838,9 +839,15 @@ class Processor extends LibraryInstaller
 
 		if ($check_excluded_files !== TRUE) {
 			foreach ($this->installationMap as $path => $packages) {
-				$checksum = !in_array($path, $check_excluded_files)
-					? md5(file_get_contents(getcwd() . DIRECTORY_SEPARATOR . $path))
-					: $original_checksums[$path];
+				if (!in_array($path, $check_excluded_files)) {
+					$checksum = is_file(getcwd() . DIRECTORY_SEPARATOR . $path)
+						? md5(file_get_contents(getcwd() . DIRECTORY_SEPARATOR . $path))
+						: md5('');
+
+				} else {
+					$checksum = $original_checksums[$path];
+				}
+				
 
 				$this->installationMap['__CHECKSUMS__'][$path] = $checksum;
 			}
