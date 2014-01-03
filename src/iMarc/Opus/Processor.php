@@ -528,7 +528,7 @@ class Processor extends LibraryInstaller
 		}
 
 		if (is_file($source)) {
-			if (in_array($dest[strlen($dest - 1)], self::$separators) || is_dir($dest)) {
+			if (in_array($dest[strlen($dest) - 1], self::$separators) || is_dir($dest)) {
 				$target_dir = rtrim($dest, '/\\' . DIRECTORY_SEPARATOR);
 				$file_name  = pathinfo($source, PATHINFO_BASENAME);
 			} else {
