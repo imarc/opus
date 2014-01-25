@@ -93,8 +93,8 @@ A single package can support multiple frameworks by adding multiple keyed object
 
 Integration packages are a bit like meta packages in composer, although they can also provide some files themselves.  Principally, an integration package is used in the following circumstances:
 
-1) When a number of third-party packages and/or package assets can or should be combined to provide a single installable feature.
-2) When existing third-party packages do not support Opus and maintaining a fork just to provide opus support is not feasible.
+1. When a number of third-party packages and/or package assets can or should be combined to provide a single installable feature.
+2. When existing third-party packages do not support Opus and maintaining a fork just to provide opus support is not feasible.
 
 In short, integration packages allow you to provide installation maps for one or more packages which do not provide them on their own, or where their existing installation map is undesirable for a given purpose.
 
