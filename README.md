@@ -1,17 +1,27 @@
 # Opus
 
-Opus is a custom composer installer which can be used to faciliate loose package management for assets, framework modules, or configuration code.  While `composer/installers` offers custom installers, these suffer from a few problems which make them fairly limited.
+## What Does it Do?
 
-These problems can frequently mean that a maintainer might have to maintain several packaged copies of a single library or that the buck is passed to framework developers to package libraries for their framework.
+Opus copies files from composer packages into your root package / project.
 
-Opus uses integration packages which provide a simple map to copy files from source packages into your framework or application's folder structure.  These support multiple source and destination directories, cherry picking files, and multiple frameworks in a single package.
+## How Does it Work?
 
-## Using Opus Packages in Your Framework/App
+Packages provide installation maps for supporting frameworks which tell Opus which files to copy from the source package and where to copy them in the project root.
 
-- Merge the below JSON into your framework or application's `composer.json` file.
-- Add integration packages as you normally would to the `require` object.
+## Why Do I Need It?
+
+Opus allows for framework modules or asset libraries to be bundled together.  For example, if you have a CMS which has plugins, your plugins are likely in PHP, but they may also require additional CSS or Javascript files which need to be copied somewhere in the project.
+
+Additionally, some pluggable components require extra steps where the user must "configure" the plugin by copying and pasting some bootstrap PHP into a file in a plugin dirctory or something similar.  Opus can copy the plugin file instead, and then the user can edit only if it's necessary to customize.
+
+## Enabling Opus in Your Framework, CMS, or Project's `composer.json` File
+
+_NOTE: Opus will use the `name` property in the `composer.json` to determine which installation map to use from supporting packages._
 
 ```json
+"require": {
+	"imarc/opus": "*"
+},
 "extra": {
 	"opus": {
 		"enabled": true
@@ -19,7 +29,9 @@ Opus uses integration packages which provide a simple map to copy files from sou
 }
 ```
 
-Using the above alone, Opus will match the standard `name` value on your root package to determine which set of installation paths packages should use.  If your `name` value does not match a standard framework or if you've changed the package name for any reason, you can overload the framework name with something like the following:
+## Telling Opus What Framework Your Project Uses
+
+_NOTE: This only has to be done if the `name` in your project's `composer.json` does not match the supporting framework._
 
 ```json
 "extra": {
@@ -31,17 +43,21 @@ Using the above alone, Opus will match the standard `name` value on your root pa
 }
 ```
 
-If the above information is set, Opus will use the value of `extra.opus.options.framework` instead of the `name` value on the package to match installation paths.
+## Opus Packages
 
-## Creating an Opus Package
+There are two types of Opus packages:
 
-You can add Opus support to your existing packages by adding the following JSON to their `composer.json` file, replacing fields in `<>` with the appropriate values.
+1) Standard Packages
+2) Integration Package
+
+### Standard Packages
+
+A standard package is a regular composer package which has been configured to support one or more frameworks by providing one or more installation maps keyed by the framework name.
+
+It has the following information added to the `composer.json`:
 
 ```json
 "type": "opus-package",
-"require": {
-	"imarc/opus": "*"
-},
 "extra": {
 	"opus": {
 		"<framework>": {
@@ -53,25 +69,50 @@ You can add Opus support to your existing packages by adding the following JSON 
 }
 ```
 
-When Opus is run, it will examine your root package's framework value (see above) and use the matching `"<source>": "<destination>"` mapping from the list provided.  Your package can support multiple frameworks simply by adding additional map object, keyed by the framework package name.  If no matching framework is found, no action will be taken.
+When being installed or upgraded, Opus will look at the root package or project's `name` or `extra.opus.options.framework` and see if there is a matching key in the `extra.opus` object in the supporting package.  If a matching key is found, Opus will iterate over each each property using the `<source>` key to identify a file or folder location in the package and copy it to the path referenced by the `<destination>` value in supporting project.
 
-## External Integration Packages
+A single package can support multiple frameworks by adding multiple keyed objects to the `extra.opus` object:
 
-An external integration package is a package which attempts to handle the Opus installation of multiple sub packages.  It does this by wrapping the `"<source>": "<destination>"` mappings in an additional object whose key matches the package names they apply to.  It is additionally useful because you can glob package names.
+```json
+"type": "opus-package",
+"extra": {
+	"opus": {
+		"SomeVendor\CMS": {
+			"js/jquery.listview.js": "public/assets/lib/",
+			"css/listview.css": "public/assets/styles/views"
+		},
+		"Acme\Framework": {
+			"js/jquery.listview.js": "docroot/js/",
+			"css/listview.css": "docroot/css"
+		}
+	}
+}
+```
 
-The diagram below shows an hypothetical integration package which provides code of it's own, but also requires asset files from a hypothetical frontend framework and a third-party library.  In addition to handling it's own Opus mappings it handles that of the asset package as well:
+### Integration Packages
+
+Integration packages are a bit like meta packages in composer, although they can also provide some files themselves.  Principally, an integration package is used in the following circumstances:
+
+1) When a number of third-party packages and/or package assets can or should be combined to provide a single installable feature.
+2) When existing third-party packages do not support Opus and maintaining a fork just to provide opus support is not feasible.
+
+In short, integration packages allow you to provide installation maps for one or more packages which do not provide them on their own, or where their existing installation map is undesirable for a given purpose.
+
+Since integration packages are more complex, we've created the diagram below to illustrate a hypothetical integration package which provides code of it's own, but also requires asset files from a frontend framework and a third-party library.
+
+_NOTE: The integration package requires the additional packages directly.  If one of the packages were required independently and also provided an installation map, both installation maps would be used._
 
 ![A diagram showing various packages and Opus integration package for a framework.](https://dl.dropboxusercontent.com/u/31068853/opus.jpg)
 
 ## Schema
 
-### Framework/App
+### Framework/Project/Root Package
 
 ```json
-"name": "<framework>",
+"name": "<framework>",                       // Used to identify package installation maps
 "extra": {
 	"opus": {
-		"enabled": true|false,               // Enable/Disable Opus
+		"enabled": true|false,               // Enable/disable Opus altogether
 		"options": {
 			"framework": "<framework>",      // Override package name to specify a framework
 			"external-mapping": true|false   // Enable/Disable external integration packages
@@ -85,38 +126,35 @@ The diagram below shows an hypothetical integration package which provides code 
 
 ```json
 "type": "opus-package",
-"require": {
-	"imarc/opus": "*"
-},
 "extra": {
 	"opus": {
-		"<framework>": {                     // Framework object
-			"<source>": "<destination>",     // Mapping (for this package)
+		"<framework>": {                     // Installation map keyed by the framework
+			"<source>": "<destination>",     // Source / destination for this package
 			...
 		},
-		...                                  // Additional Frameworks and Mappings
+		...                                  // Additional supported frameworks and mappings
 	}
 }
 ```
 
-### External Integration Package
+### Integration Package
 
 ```json
 "type": "opus-package",
 "require": {
-	"imarc/opus": "*"
-},
+	"package": "version"                     // Third-party integrated package
+}
 "extra": {
 	"opus": {
-		"<framework>": {                     // Framework object
-			"<source>": "<destination>",     // Mapping (for this package)
-			"<package>": {                   // External Package Mapping object
-				"<source>": "<destination>", // Mapping
+		"<framework>": {                     // Installation map keyed by the framework
+			"<source>": "<destination>",     // Source / destination for this package
+			"<package>": {                   // Installation map for third-party package
+				"<source>": "<destination>", // Source / destination for third-party
 				...
 			},
 			...
 		},
-		...                                  // Additional Frameworks and Package Mappings
+		...                                  // Additional supported frameworks and mappings
 	}
 }
 ```
@@ -133,7 +171,7 @@ During installation operations Opus will raise a conflict in the event a file it
 
 The completion of an installation writes some meta information about the current state of files copied by Opus to an `opus.map` file in the root working directory of your project.  This file is then consulted for information regarding any files that may be overwritten during future updates.
 
-Unlike installation, however, because it is expected that files will exist, and because various projects might have different needs, the integrity is configurable.  As noted above, you can specify an `"integrity"` option on your root package's Opus options with a value of `high`, `medium`, or `low`:
+Unlike installation, however, because it is expected that files will exist, and because various projects might have different needs, the integrity is configurable.  As noted above, you can specify an `"integrity"` option on your project's Opus options with a value of `high`, `medium`, or `low`:
 
 ```json
 "name": "<framework>",
@@ -147,6 +185,8 @@ Unlike installation, however, because it is expected that files will exist, and 
 ```
 
 #### Medium Integrity (Default)
+
+_*NOTE: Medium integrity is currently broken, see issue #4.  Before committing any changes pulled in from Opus updates, make sure to review the differences in your version control software.*_
 
 Medium project integrity follows a few basic rules:
 
@@ -169,5 +209,5 @@ Low integrity, similar to high integrity, makes a simple decision.  Any conflict
 
 We encourage framework and library developers to begin providing Opus support in their frameworks, web apps, libraries, or asset packages.  If you are a framework maintainer and plan to include Opus, please open an issue on this project and we'll add your namespace(s) and links to the list:
 
-- iMarc Sitemanager [`imarc`]: http://www.imarc.net/
-- inKWell 2.0 [`inkwell-2.0`]: http://inkwell.dotink.org/2.0/
+- iMarc Application Base and Sitemanager [`imarc/app-base`]: http://www.imarc.net/
+- inKWell 2.0 [`dotink/inkwell-2.0`]: http://inkwell.dotink.org/2.0/

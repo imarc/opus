@@ -246,7 +246,7 @@ class Processor extends LibraryInstaller
 
 				foreach ($conflicts as $a => $b) {
 					$current_directory = str_replace(DIRECTORY_SEPARATOR, '/', $b);
-					$destination_path  = str_replace($current_directory, '', $b);
+					$destination_path  = str_replace($current_directory,   '', $b);
 					$current_checksum  = md5(file_get_contents($b));
 
 					$has_changed = isset($original_checksums[$destination_path])
@@ -848,7 +848,7 @@ class Processor extends LibraryInstaller
 				} else {
 					$checksum = $original_checksums[$path];
 				}
-				
+
 
 				$this->installationMap['__CHECKSUMS__'][$path] = $checksum;
 			}
