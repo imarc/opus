@@ -47,8 +47,8 @@ _NOTE: This only has to be done if the `name` in your project's `composer.json` 
 
 There are two types of Opus packages:
 
-1) Standard Packages
-2) Integration Package
+1. Standard Packages
+2. Integration Package
 
 ### Standard Packages
 
