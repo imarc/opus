@@ -245,9 +245,9 @@ class Processor extends LibraryInstaller
 					: array();
 
 				foreach ($conflicts as $a => $b) {
-					$current_directory = str_replace(DIRECTORY_SEPARATOR, '/', $b);
-					$destination_path  = str_replace($current_directory,   '', $b);
-					$current_checksum  = md5(file_get_contents($b));
+					$base_path        = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
+					$destination_path = str_replace($base_path, '', $b);
+					$current_checksum = md5(file_get_contents($b));
 
 					$has_changed = isset($original_checksums[$destination_path])
 						? $original_checksums[$destination_path] != $current_checksum
@@ -614,7 +614,7 @@ class Processor extends LibraryInstaller
 	 */
 	private function copyMap($package_map, &$conflicts = NULL)
 	{
-		$conflicts = array();
+		$conflicts = (array) $conflicts;
 		$manager   = $this->composer->getRepositoryManager();
 		$packages  = $manager->getLocalRepository()->getPackages();
 
