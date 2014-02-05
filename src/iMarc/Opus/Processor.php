@@ -164,7 +164,7 @@ class Processor extends LibraryInstaller
 			$this->resolve($conflicts);
 		}
 
-		$this->saveInstallationMap(array());
+		$this->saveInstallationMap();
 		$this->io->write(PHP_EOL);
 	}
 
@@ -237,7 +237,7 @@ class Processor extends LibraryInstaller
 				$conflicts
 			);
 
-			$check_excluded_files = array();
+			$checksum_overrides = array();
 
 			if (count($conflicts)) {
 				$original_checksums = isset($this->installationMap['__CHECKSUMS__'])
@@ -248,10 +248,10 @@ class Processor extends LibraryInstaller
 					$base_path        = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
 					$destination_path = str_replace($base_path, '', $b);
 					$current_checksum = md5(file_get_contents($b));
-
-					$has_changed = isset($original_checksums[$destination_path])
-						? $original_checksums[$destination_path] != $current_checksum
-						: FALSE;
+					$new_checksum     = md5(file_get_contents($a));
+					$old_checksum     = isset($original_checksums[$destination_path])
+						? $original_checksums[$destination_path]
+						: NULL;
 
 					switch ($this->integrity) {
 						case 'low':
@@ -259,24 +259,37 @@ class Processor extends LibraryInstaller
 							break;
 
 						case 'medium':
-							if (!$has_changed) {
-								copy($a, $b);
+							if ($new_checksum == $old_checksum) {
+								//
+								// If the file has not changed in the updated package don't do anything
+								//
+								$checksum_overrides[$destination_path] = $old_checksum;
+								continue;
 
-							} elseif (!$this->resolve(array($a => $b))) {
-								$check_excluded_files[] = $destination_path;
+							} elseif ($old_checksum == $current_checksum) {
+								//
+								// If the file on disk has not changed from the old package copy the new one
+								//
+								copy($a, $b);
+								break;
+
+							} else {
+								//
+								// Resolve like "high" integrity
+								//
 							}
-							break;
+
 
 						case 'high':
 							if (!$this->resolve(array($a => $b))) {
-								$check_excluded_files[] = $destination_path;
+								$checksum_overrides[$destination_path] = $new_checksum;
 							}
 							break;
 					}
 				}
 			}
 
-			$this->saveInstallationMap($check_excluded_files);
+			$this->saveInstallationMap($checksum_overrides);
 		}
 
 		//
@@ -800,10 +813,10 @@ class Processor extends LibraryInstaller
 	 * should be maintained.
 	 *
 	 * @access private
-	 * @param $check_excluded_files An array of files to exclude from hash calcs
+	 * @param $checksum_overrides An array of files to exclude from hash calcs
 	 * @return void
 	 */
-	private function saveInstallationMap($check_excluded_files = array())
+	private function saveInstallationMap($checksum_overrides = array())
 	{
 		//
 		// Temporarily remove original checksums
@@ -838,23 +851,27 @@ class Processor extends LibraryInstaller
 		// Re-generate checksums or add original back in
 		//
 
-		if ($check_excluded_files !== TRUE) {
+		if ($checksum_overrides === TRUE) {
+			//
+			// Keep all original checksums
+			//
+			$this->installationMap['__CHECKSUMS__'] = $original_checksums;
+
+		} else {
 			foreach ($this->installationMap as $path => $packages) {
-				if (!in_array($path, $check_excluded_files)) {
+				if (!isset($checksum_overrides[$path])) {
 					$checksum = is_file(getcwd() . DIRECTORY_SEPARATOR . $path)
 						? md5(file_get_contents(getcwd() . DIRECTORY_SEPARATOR . $path))
 						: md5('');
 
 				} else {
-					$checksum = $original_checksums[$path];
+					$checksum = $checksum_overrides[$path];
 				}
 
 
 				$this->installationMap['__CHECKSUMS__'][$path] = $checksum;
 			}
 
-		} else {
-			$this->installationMap['__CHECKSUMS__'] = $original_checksums;
 		}
 
 		//
