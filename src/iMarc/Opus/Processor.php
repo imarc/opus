@@ -145,6 +145,10 @@ class Processor extends LibraryInstaller
 	{
 		parent::install($repo, $package);
 
+		if (getenv('OPUS_DISABLED')) {
+			return;
+		}
+
 		//
 		// Return immediately if we have no information relevant to our installer
 		//
@@ -194,6 +198,10 @@ class Processor extends LibraryInstaller
 	public function update(InstalledRepositoryInterface $repo, PackageInterface $initial, PackageInterface $target)
 	{
 		parent::update($repo, $initial, $target);
+
+		if (getenv('OPUS_DISABLED')) {
+			return;
+		}
 
 		//
 		// Don't attempt to remove anything if the initial package didn't have Opus support.
@@ -315,6 +323,11 @@ class Processor extends LibraryInstaller
 	 */
 	public function uninstall(InstalledRepositoryInterface $repo, PackageInterface $package)
 	{
+		if (getenv('OPUS_DISABLED')) {
+			parent::uninstall($repo, $package);
+			return;
+		}
+
 		//
 		// Return immediately if we have no information relevant to our installer
 		//
