@@ -272,7 +272,7 @@ class Processor extends LibraryInstaller
 								// If the file has not changed in the updated package don't do anything
 								//
 								$checksum_overrides[$destination_path] = $old_checksum;
-								continue;
+								break;
 
 							} elseif ($old_checksum == $current_checksum) {
 								//
