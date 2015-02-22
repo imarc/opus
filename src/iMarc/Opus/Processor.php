@@ -750,7 +750,7 @@ class Processor extends LibraryInstaller
 	 */
 	private function resolve(&$result)
 	{
-		if (!count($result['conflicts'])) {
+		if (!isset($result['conflicts']) || !count($result['conflicts'])) {
 			return;
 		}
 
