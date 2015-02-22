@@ -761,11 +761,11 @@ class Processor extends LibraryInstaller
 		foreach ($result['conflicts'] as $a => $b) {
 			$base_path        = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
 			$opus_path        = str_replace($base_path, '', $b);
-			$current_checksum = md5(file_get_contents($b));
-			$new_checksum     = md5(file_get_contents($a));
+			$current_checksum = md5(@file_get_contents($b));
+			$new_checksum     = md5(@file_get_contents($a));
 			$old_checksum     = isset($original_checksums[$opus_path])
 				? $original_checksums[$opus_path]
-				: NULL;
+				: md5(FALSE);
 
 			switch ($this->integrity) {
 				case 'low':
@@ -776,18 +776,24 @@ class Processor extends LibraryInstaller
 					if ($new_checksum == $old_checksum) {
 
 						//
-						// If the file at the destination is the same as the source, just
-						// make sure our original checksum is mapped.
+						// A conflict is only raised if the destinaton differs from the source.
+						// However, if we "keep" a file on a previous conflict, the map will be
+						// updated with the new checksum even though the file is not copied.  By
+						// checking if the new checksum is equal to the old, we can determine if
+						// the file has actually changed in the package.  If it has not, we
+						// don't need to do anything.
 						//
 
-						$result['updates'][$opus_path] = $old_checksum;
 						break;
 
 					} elseif ($old_checksum == $current_checksum) {
 
 						//
-						// If there is an old checksum, and it matches the current checksum, go
-						// ahead and copy and update the checksum.
+						// If we didn't pass the previous condition, then it means that the file
+						// in the package has changed since the previous copy or keep.  So now
+						// we want to see if the old checksum is equivalent to the current file.
+						// This would imply we have not changed it.  If we have no customizations
+						// then we can  safely copy the file and update the checksum in the map.
 						//
 
 						copy($a, $b);
@@ -797,7 +803,9 @@ class Processor extends LibraryInstaller
 					} else {
 
 						//
-						// Resolve like "high" integrity
+						// Lastly, if our new checksum is not the same as our old one and our
+						// old one is not our current one, we want to give the user the option
+						// to resolve this as if it were 'high' integrity.
 						//
 
 					}
@@ -808,7 +816,7 @@ class Processor extends LibraryInstaller
 						PHP_EOL . self::TAB . 'The following conflicts were found:' . PHP_EOL
 					);
 
-					while (!$answer || $answer == 'd') {
+					while (!$answer) {
 						$answer = $this->io->ask(sprintf(
 							self::TAB . '- %s [o=overwrite (default), k=keep, d=diff]: ',
 							$opus_path
@@ -817,19 +825,21 @@ class Processor extends LibraryInstaller
 						switch(strtolower($answer[0])) {
 							case 'o':
 								copy($a, $b);
+								$result['updates'][$opus_path] = $new_checksum;
 								break;
+
 							case 'k':
+								$result['updates'][$opus_path] = $new_checksum;
 								break;
+
 							case 'd':
 								$this->io->write(PHP_EOL . self::diff($a, $b) . PHP_EOL);
-								break;
 							default:
 								$answer = NULL;
 								break;
 						}
 					}
 
-					$result['updates'][$opus_path] = $new_checksum;
 					break;
 			}
 		}
