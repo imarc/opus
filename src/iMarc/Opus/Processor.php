@@ -21,6 +21,16 @@ class Processor extends LibraryInstaller
 	const TAB          = '    ';
 
 	/**
+	 * A list of common directory separators, including the system designated one
+	 *
+	 * @static
+	 * @access private
+	 * @var array
+	 */
+	static private $separators = ['\\', '/', DIRECTORY_SEPARATOR];
+
+
+	/**
 	 * The working installation map - tracks file copies
 	 *
 	 * @access private
@@ -54,9 +64,6 @@ class Processor extends LibraryInstaller
 	 * @var string
 	 */
 	private $mapFile = NULL;
-
-
-	static private $separators = ['\\', '/', DIRECTORY_SEPARATOR];
 
 
 	/**
@@ -161,14 +168,11 @@ class Processor extends LibraryInstaller
 
 		$this->copyMap(
 			$this->buildPackageMap($package),
-			$conflicts
+			$result
 		);
 
-		if (count($conflicts)) {
-			$this->resolve($conflicts);
-		}
-
-		$this->saveInstallationMap();
+		$this->resolve($result);
+		$this->saveInstallationMap($result);
 		$this->io->write(PHP_EOL);
 	}
 
@@ -225,7 +229,7 @@ class Processor extends LibraryInstaller
 				);
 			}
 
-			$this->saveInstallationMap(TRUE);
+			$this->saveInstallationMap();
 		}
 
 		//
@@ -242,62 +246,11 @@ class Processor extends LibraryInstaller
 
 			$this->copyMap(
 				$this->buildPackageMap($target),
-				$conflicts
+				$result
 			);
 
-			$checksum_overrides = array();
-
-			if (count($conflicts)) {
-				$original_checksums = isset($this->installationMap['__CHECKSUMS__'])
-					? $this->installationMap['__CHECKSUMS__']
-					: array();
-
-				foreach ($conflicts as $a => $b) {
-					$base_path        = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
-					$destination_path = str_replace($base_path, '', $b);
-					$current_checksum = md5(file_get_contents($b));
-					$new_checksum     = md5(file_get_contents($a));
-					$old_checksum     = isset($original_checksums[$destination_path])
-						? $original_checksums[$destination_path]
-						: NULL;
-
-					switch ($this->integrity) {
-						case 'low':
-							copy ($a, $b);
-							break;
-
-						case 'medium':
-							if ($new_checksum == $old_checksum) {
-								//
-								// If the file has not changed in the updated package don't do anything
-								//
-								$checksum_overrides[$destination_path] = $old_checksum;
-								break;
-
-							} elseif ($old_checksum == $current_checksum) {
-								//
-								// If the file on disk has not changed from the old package copy the new one
-								//
-								copy($a, $b);
-								break;
-
-							} else {
-								//
-								// Resolve like "high" integrity
-								//
-							}
-
-
-						case 'high':
-							if (!$this->resolve(array($a => $b))) {
-								$checksum_overrides[$destination_path] = $new_checksum;
-							}
-							break;
-					}
-				}
-			}
-
-			$this->saveInstallationMap($checksum_overrides);
+			$this->resolve($result);
+			$this->saveInstallationMap($result);
 		}
 
 		//
@@ -307,7 +260,7 @@ class Processor extends LibraryInstaller
 		//
 
 		$this->cleanup();
-		$this->saveInstallationMap(TRUE);
+		$this->saveInstallationMap();
 
 		$this->io->write(PHP_EOL);
 	}
@@ -345,7 +298,7 @@ class Processor extends LibraryInstaller
 		}
 
 		$this->cleanup();
-		$this->saveInstallationMap(TRUE);
+		$this->saveInstallationMap();
 
 		parent::uninstall($repo, $package);
 	}
@@ -379,8 +332,7 @@ class Processor extends LibraryInstaller
 
 				if ($element != $package->getName() && !$this->externalMapping) {
 					throw new \Exception(sprintf(
-						'Cannot perform external mapping for %s, disabled',
-						$element
+						'Cannot perform external mapping for %s, disabled', $element
 					));
 				}
 
@@ -408,9 +360,7 @@ class Processor extends LibraryInstaller
 
 			} else {
 				throw new \Exception (sprintf(
-					'Ivalid element %s of type %s',
-					$element,
-					gettype($value)
+					'Ivalid element %s of type %s', $element, gettype($value)
 				));
 			}
 		}
@@ -542,91 +492,101 @@ class Processor extends LibraryInstaller
 	 * @param string $entry_name The name for the entry in the installation map
 	 * @return array An array of conflicts
 	 */
-	private function copy($source, $dest, $entry_name = NULL)
+	private function copy($a, $b, $entry_name = NULL)
 	{
-		$conflicts   = array();
-		$source      = rtrim(realpath($source), '/\\' . DIRECTORY_SEPARATOR);
+		$a      = rtrim(realpath($a), '/\\' . DIRECTORY_SEPARATOR);
+		$result = array('updates' => array(), 'conflicts' => array());
 
-		if (!$source) {
+		if (!$a) {
 			throw new \Exception(sprintf(
-				'Cannot install, bad source entry while trying to install %s',
-				$entry_name
+				'Cannot install, bad source entry while trying to install %s', $entry_name
 			));
 		}
 
-		if (is_file($source)) {
-			if (in_array($dest[strlen($dest) - 1], self::$separators) || is_dir($dest)) {
-				$target_dir = rtrim($dest, '/\\' . DIRECTORY_SEPARATOR);
-				$file_name  = pathinfo($source, PATHINFO_BASENAME);
+		if (is_file($a)) {
+
+			//
+			// If target $b looks like a directory or is a directory, use it as our target dir
+			// and the original filename of our source as the file name
+			//
+
+			if (in_array($b[strlen($b) - 1], self::$separators) || is_dir($b)) {
+				$target_dir = rtrim($b, '/\\' . DIRECTORY_SEPARATOR);
+				$file_name  = pathinfo($a, PATHINFO_BASENAME);
+
+			//
+			// Otherwise, use the directory of the destination as the target dir and the name
+			// of the destination as the filename
+			//
+
 			} else {
-				$target_dir = pathinfo($dest, PATHINFO_DIRNAME);
-				$file_name  = pathinfo($dest, PATHINFO_BASENAME);
+				$target_dir = pathinfo($b, PATHINFO_DIRNAME);
+				$file_name  = pathinfo($b, PATHINFO_BASENAME);
 			}
 
 			$this->createDirectory($target_dir, $entry_name);
 
-			$conflict = FALSE;
-			$dest     = $target_dir . DIRECTORY_SEPARATOR . $file_name;
+			$b = $target_dir . DIRECTORY_SEPARATOR . $file_name;
 
-			if (file_exists($dest)) {
-				if (!is_writable($dest)) {
+			if (file_exists($b)) {
+				if (!is_writable($b)) {
 					throw new \Exception(sprintf(
-						'Cannot install, cannot write to file at "%s"',
-						$dest
+						'Cannot install, cannot write to file at "%s"', $b
 					));
 				}
 
-				$a = md5(preg_replace('/\s/', '', file_get_contents($source)));
-				$b = md5(preg_replace('/\s/', '', file_get_contents($dest)));
+				$new_checksum     = md5(preg_replace('/\s/', '', file_get_contents($a)));
+				$current_checksum = md5(preg_replace('/\s/', '', file_get_contents($b)));
 
-				if ($a !== $b) {
-					$conflict           = TRUE;
-					$conflicts[$source] = $dest;
+				if ($new_checksum !== $current_checksum) {
+					$result['conflicts'][$a] = $b;
 				}
 			}
 
-			if (!$conflict) {
-				copy($source, $dest);
+			if (!isset($result['conflicts'][$a])) {
+				copy($a, $b);
+
+				$base_path = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
+				$opus_path = str_replace($base_path, '', $b);
+
+				$result['updates'][$opus_path] = md5(file_get_contents($b));
 			}
 
-			$this->map($dest, $entry_name);
+			$this->map($b, $entry_name);
 
-		} elseif (is_dir($source)) {
-			if (is_file($dest)) {
+		} elseif (is_dir($a)) {
+			if (is_file($b)) {
 				throw new \Exception(sprintf(
-					'Cannot copy source "%s" (directory) to "%s" (file)',
-					$source,
-					$dest
+					'Cannot copy source "%s" (directory) to "%s" (file)', $a, $b
 				));
 			}
 
-			$target_dir = rtrim($dest, '/\\' . DIRECTORY_SEPARATOR);
+			$target_dir = rtrim($b, '/\\' . DIRECTORY_SEPARATOR);
 
-			if (in_array($dest[strlen($dest) -1], self::$separators)) {
-				$target_dir .= DIRECTORY_SEPARATOR . pathinfo($source, PATHINFO_BASENAME);
+			if (in_array($b[strlen($b) -1], self::$separators)) {
+				$target_dir .= DIRECTORY_SEPARATOR . pathinfo($a, PATHINFO_BASENAME);
 			}
 
 			$this->createDirectory($target_dir, $entry_name);
 
-			foreach (glob($source . DIRECTORY_SEPARATOR . '*') as $path) {
-				$conflicts = array_merge(
+			foreach (glob($a . DIRECTORY_SEPARATOR . '*') as $path) {
+				$result = array_replace_recursive(
 					$this->copy(
 						realpath($path),
 						$target_dir . DIRECTORY_SEPARATOR . pathinfo($path, PATHINFO_BASENAME),
 						$entry_name
 					),
-					$conflicts
+					$result
 				);
 			}
 
 		} else {
 			throw new \Exception(sprintf(
-				'Cannot copy source "%s", not readable or not a normal file or directory',
-				$source
+				'Cannot copy source "%s", not readable or not a normal file or directory', $a
 			));
 		}
 
-		return $conflicts;
+		return $result;
 	}
 
 
@@ -635,14 +595,14 @@ class Processor extends LibraryInstaller
 	 *
 	 * @access private
 	 * @param array $package_map A package map to lookup sources and destinations
-	 * @param array $conflicts A reference which will be loaded up with conflicts
+	 * @param array $result A reference which will be loaded up update and conflict information
 	 * @return void
 	 */
-	private function copyMap($package_map, &$conflicts = NULL)
+	private function copyMap($package_map, &$result = NULL)
 	{
-		$conflicts = (array) $conflicts;
-		$manager   = $this->composer->getRepositoryManager();
-		$packages  = $manager->getLocalRepository()->getPackages();
+		$result   = (array) $result;
+		$manager  = $this->composer->getRepositoryManager();
+		$packages = $manager->getLocalRepository()->getPackages();
 
 		foreach ($packages as $package) {
 			$package_name = $package->getName();
@@ -657,16 +617,16 @@ class Processor extends LibraryInstaller
 				substr($package_root, strlen(getcwd()))
 			));
 
-			foreach ($package_map[$package_name] as $source => $dest) {
-				$source    = trim($source,  '/\\' . DIRECTORY_SEPARATOR);
-				$dest      = ltrim($dest,   '/\\' . DIRECTORY_SEPARATOR);
-				$conflicts = array_merge(
+			foreach ($package_map[$package_name] as $a => $b) {
+				$a =  trim($a, '/\\' . DIRECTORY_SEPARATOR);
+				$b = ltrim($b, '/\\' . DIRECTORY_SEPARATOR);
+				$result = array_replace_recursive(
 					$this->copy(
-						$package_root . DIRECTORY_SEPARATOR . $source,
-						getcwd() . DIRECTORY_SEPARATOR . $dest,
+						$package_root . DIRECTORY_SEPARATOR . $a,
+						getcwd() . DIRECTORY_SEPARATOR . $b,
 						$package_name
 					),
-					$conflicts
+					$result
 				);
 			}
 		}
@@ -732,8 +692,7 @@ class Processor extends LibraryInstaller
 		if (file_exists($this->mapFile)) {
 			if (!is_readable($this->mapFile) || is_dir($this->mapFile)) {
 				throw new \Exception(sprintf(
-					'Cannot read map file at %s',
-					$this->mapFile
+					'Cannot read map file at %s', $this->mapFile
 				));
 			}
 
@@ -741,8 +700,7 @@ class Processor extends LibraryInstaller
 
 			if ($this->installationMap === NULL) {
 				throw new \Exception(sprintf(
-					'Broken map file at %s',
-					$this->mapFile
+					'Broken map file at %s', $this->mapFile
 				));
 			}
 		}
@@ -750,30 +708,35 @@ class Processor extends LibraryInstaller
 
 
 	/**
-	 * Maps a destination under a given entry name
+	 * Maps a package entry name to an opus path
 	 *
-	 * The destination is taken relative to the current working directory
+	 * This essentially ensures that our map keeps track of which packages have touched a given
+	 * destination file.  If all packages are removed for a given file, then the file can be
+	 * safely removed as well.
 	 *
 	 * @access private
 	 * @param string $dest The Destination to map
 	 * @param string $entry_name The entry name to map under
 	 * @return void
 	 */
-	private function map($dest, $entry_name)
+	private function map($destination, $entry_name)
 	{
-		$current_directory = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
-		$relative_path     = str_replace($current_directory, '', $dest);
+		$base_path = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
+		$opus_path = str_replace($base_path, '', $destination);
 
-		if (!isset($this->installationMap[$relative_path])) {
-			$this->installationMap[$relative_path] = array();
+		if (!isset($this->installationMap[$opus_path])) {
+			$this->installationMap[$opus_path] = array();
 		}
 
-		if (!in_array($entry_name, $this->installationMap[$relative_path])) {
-			$this->installationMap[$relative_path][] = $entry_name;
+		if (!in_array($entry_name, $this->installationMap[$opus_path])) {
+			$this->installationMap[$opus_path][] = $entry_name;
+
 		} else {
+
 			//
 			// It's already mapped, what more do you want?
 			//
+
 		}
 	}
 
@@ -782,37 +745,92 @@ class Processor extends LibraryInstaller
 	 * Resolve conflicts by prompting the user for action
 	 *
 	 * @access private
-	 * @param array $conflicts A list of conflicts $source => $destination
+	 * @param array $result A copymap result containing updates and conflicts
 	 * @return boolean TRUE if the user overwrite with the new version, FALSE otherwise
 	 */
-	private function resolve($conflicts)
+	private function resolve(&$result)
 	{
-		$this->io->write(
-			PHP_EOL . self::TAB . 'The following conflicts were found:' . PHP_EOL
-		);
+		if (!count($result['conflicts'])) {
+			return;
+		}
 
-		foreach ($conflicts as $a => $b) {
-			$answer = NULL;
+		$original_checksums = isset($this->installationMap['__CHECKSUMS__'])
+			? $this->installationMap['__CHECKSUMS__']
+			: array();
 
-			while (!$answer || $answer == 'd') {
-				$answer = $this->io->ask(sprintf(
-					self::TAB . '- %s [o=overwrite (default), k=keep, d=diff]: ',
-					substr($b, strlen(getcwd()))
-				), 'o');
+		foreach ($result['conflicts'] as $a => $b) {
+			$base_path        = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
+			$opus_path        = str_replace($base_path, '', $b);
+			$current_checksum = md5(file_get_contents($b));
+			$new_checksum     = md5(file_get_contents($a));
+			$old_checksum     = isset($original_checksums[$opus_path])
+				? $original_checksums[$opus_path]
+				: NULL;
 
-				switch(strtolower($answer[0])) {
-					case 'o':
+			switch ($this->integrity) {
+				case 'low':
+					copy ($a, $b);
+					break;
+
+				case 'medium':
+					if ($new_checksum == $old_checksum) {
+
+						//
+						// If the file at the destination is the same as the source, just
+						// make sure our original checksum is mapped.
+						//
+
+						$result['updates'][$opus_path] = $old_checksum;
+						break;
+
+					} elseif ($old_checksum == $current_checksum) {
+
+						//
+						// If there is an old checksum, and it matches the current checksum, go
+						// ahead and copy and update the checksum.
+						//
+
 						copy($a, $b);
-						return TRUE;
-					case 'k':
-						return FALSE;
-					case 'd':
-						$this->io->write(PHP_EOL . self::diff($a, $b) . PHP_EOL);
+						$result['updates'][$opus_path] = $new_checksum;
 						break;
-					default:
-						$answer = NULL;
-						break;
-				}
+
+					} else {
+
+						//
+						// Resolve like "high" integrity
+						//
+
+					}
+
+				case 'high':
+					$answer = NULL;
+					$this->io->write(
+						PHP_EOL . self::TAB . 'The following conflicts were found:' . PHP_EOL
+					);
+
+					while (!$answer || $answer == 'd') {
+						$answer = $this->io->ask(sprintf(
+							self::TAB . '- %s [o=overwrite (default), k=keep, d=diff]: ',
+							$opus_path
+						), 'o');
+
+						switch(strtolower($answer[0])) {
+							case 'o':
+								copy($a, $b);
+								break;
+							case 'k':
+								break;
+							case 'd':
+								$this->io->write(PHP_EOL . self::diff($a, $b) . PHP_EOL);
+								break;
+							default:
+								$answer = NULL;
+								break;
+						}
+					}
+
+					$result['updates'][$opus_path] = $new_checksum;
+					break;
 			}
 		}
 	}
@@ -821,15 +839,11 @@ class Processor extends LibraryInstaller
 	/**
 	 * Saves the Opus installation map
 	 *
-	 * You can limit how checksum recalulation is handled by passing an array of files to
-	 * exclude calculations on, or by passing TRUE, which indicates that all old checksums
-	 * should be maintained.
-	 *
 	 * @access private
-	 * @param $checksum_overrides An array of files to exclude from hash calcs
+	 * @param $result A copyMap result
 	 * @return void
 	 */
-	private function saveInstallationMap($checksum_overrides = array())
+	private function saveInstallationMap($result = array())
 	{
 		//
 		// Temporarily remove original checksums
@@ -860,32 +874,13 @@ class Processor extends LibraryInstaller
 			return 1;
 		});
 
-		//
-		// Re-generate checksums or add original back in
-		//
-
-		if ($checksum_overrides === TRUE) {
-			//
-			// Keep all original checksums
-			//
-			$this->installationMap['__CHECKSUMS__'] = $original_checksums;
-
-		} else {
-			foreach ($this->installationMap as $path => $packages) {
-				if (!isset($checksum_overrides[$path])) {
-					$checksum = is_file(getcwd() . DIRECTORY_SEPARATOR . $path)
-						? md5(file_get_contents(getcwd() . DIRECTORY_SEPARATOR . $path))
-						: md5('');
-
-				} else {
-					$checksum = $checksum_overrides[$path];
-				}
-
-
-				$this->installationMap['__CHECKSUMS__'][$path] = $checksum;
+		if ($result && isset($result['updates'])) {
+			foreach ($result['updates'] as $opus_path => $checksum) {
+				$original_checksums[$opus_path] = $checksum;
 			}
-
 		}
+
+		$this->installationMap['__CHECKSUMS__'] = $original_checksums;
 
 		//
 		// Write our map
@@ -894,8 +889,7 @@ class Processor extends LibraryInstaller
 		if (file_exists($this->mapFile)) {
 			if (!is_writable($this->mapFile) || is_dir($this->mapFile)) {
 				throw new \Exception(sprintf(
-					'Cannot write to map file at %s',
-					$this->mapFile
+					'Cannot write to map file at %s', $this->mapFile
 				));
 			}
 
@@ -903,8 +897,7 @@ class Processor extends LibraryInstaller
 
 		if (!file_put_contents($this->mapFile, json_encode($this->installationMap))) {
 			throw new \Exception(sprintf(
-				'Error while saving map file at %s',
-				$this->mapFile
+				'Error while saving map file at %s', $this->mapFile
 			));
 		}
 	}
