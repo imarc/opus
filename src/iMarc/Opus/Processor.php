@@ -401,7 +401,12 @@ class Processor extends LibraryInstaller
 	private function cleanup()
 	{
 		foreach ($this->installationMap as $path => $packages) {
-			if ($path == '__CHECKSUMS__' || count($packages)) {
+			if ($path == '__CHECKSUMS__') {
+				continue;
+			}
+
+			if (count($packages)) {
+				$this->installationMap[$path] = sort($packages);
 				continue;
 			}
 
@@ -480,6 +485,22 @@ class Processor extends LibraryInstaller
 			unset($this->installationMap[$path]);
 			unset($this->installationMap['__CHECKSUMS__'][$path]);
 		}
+
+		//
+		// Sort our paths by length
+		//
+
+		uksort($this->installationMap, function($a, $b) {
+			if (strlen($a) == strlen($b)) {
+				return 0;
+			}
+
+			if (strlen($a) > strlen($b)) {
+				return -1;
+			}
+
+			return 1;
+		});
 	}
 
 
@@ -867,22 +888,6 @@ class Processor extends LibraryInstaller
 		} else {
 			$original_checksums = array();
 		}
-
-		//
-		// Sort our paths by length
-		//
-
-		uksort($this->installationMap, function($a, $b) {
-			if (strlen($a) == strlen($b)) {
-				return 0;
-			}
-
-			if (strlen($a) > strlen($b)) {
-				return -1;
-			}
-
-			return 1;
-		});
 
 		if ($result && isset($result['updates'])) {
 			foreach ($result['updates'] as $opus_path => $checksum) {
