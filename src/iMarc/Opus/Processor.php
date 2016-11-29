@@ -406,7 +406,7 @@ class Processor extends LibraryInstaller
 			}
 
 			if (count($packages)) {
-				$this->installationMap[$path] = sort($packages);
+				sort($this->installationMap[$path]);
 				continue;
 			}
 
