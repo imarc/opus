@@ -590,7 +590,7 @@ class Processor extends LibraryInstaller
 
 			$this->createDirectory($target_dir, $entry_name);
 
-			foreach (glob($a . DIRECTORY_SEPARATOR . '*') as $path) {
+			foreach (glob($a . DIRECTORY_SEPARATOR . '{,.}*[!.]') as $path) {
 				$result = array_replace_recursive(
 					$this->copy(
 						realpath($path),
