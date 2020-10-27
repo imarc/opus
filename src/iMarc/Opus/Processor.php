@@ -259,7 +259,7 @@ class Processor extends LibraryInstaller
 		// will actually remove any unhandled files and directories.
 		//
 
-		$this->cleanup();
+		$this->clean();
 		$this->saveInstallationMap();
 
 		$this->io->write(PHP_EOL);
@@ -297,7 +297,7 @@ class Processor extends LibraryInstaller
 			}
 		}
 
-		$this->cleanup();
+		$this->clean();
 		$this->saveInstallationMap();
 
 		parent::uninstall($repo, $package);
@@ -398,7 +398,7 @@ class Processor extends LibraryInstaller
 	 * @access private
 	 * @return void
 	 */
-	private function cleanup()
+	private function clean()
 	{
 		foreach ($this->installationMap as $path => $packages) {
 			if ($path == '__CHECKSUMS__') {
