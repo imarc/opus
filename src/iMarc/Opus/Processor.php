@@ -384,6 +384,13 @@ class Processor extends LibraryInstaller
 	 */
 	private function clean()
 	{
+		//
+		// Sort our paths
+		//
+
+		krsort($this->installationMap['__CHECKSUMS__']);
+		krsort($this->installationMap);
+
 		foreach ($this->installationMap as $path => $packages) {
 			if ($path == '__CHECKSUMS__') {
 				continue;
@@ -473,13 +480,6 @@ class Processor extends LibraryInstaller
 			unset($this->installationMap[$path]);
 			unset($this->installationMap['__CHECKSUMS__'][$path]);
 		}
-
-		//
-		// Sort our paths
-		//
-
-		krsort($this->installationMap['__CHECKSUMS__']);
-		krsort($this->installationMap);
 	}
 
 
