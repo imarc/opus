@@ -390,6 +390,10 @@ class Processor extends LibraryInstaller
 			}
 
 			if (count($packages)) {
+				//
+				// Sort Our Package Names
+				//
+
 				sort($this->installationMap[$path]);
 				continue;
 			}
@@ -471,20 +475,11 @@ class Processor extends LibraryInstaller
 		}
 
 		//
-		// Sort our paths by length
+		// Sort our paths
 		//
 
-		uksort($this->installationMap, function($a, $b) {
-			if (strlen($a) == strlen($b)) {
-				return 0;
-			}
-
-			if (strlen($a) > strlen($b)) {
-				return -1;
-			}
-
-			return 1;
-		});
+		ksort($this->installationMap['__CHECKSUMS__']);
+		ksort($this->installationMap);
 	}
 
 
