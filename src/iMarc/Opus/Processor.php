@@ -114,7 +114,7 @@ class Processor extends LibraryInstaller
 				? (bool) $options['external-mapping']
 				: FALSE;
 
-			if (isset($options['framework'])) {
+				if (isset($options['framework'])) {
 				$this->framework = $options['framework'];
 
 				//
@@ -151,23 +151,29 @@ class Processor extends LibraryInstaller
 	public function install(InstalledRepositoryInterface $repo, PackageInterface $package)
 	{
 		$promise = parent::install($repo, $package);
+		$install = function ($value = NULL) use ($repo, $package) {
+			if (!getenv('OPUS_DISABLED') && $this->checkFrameworkSupport($package)) {
+				$this->loadInstallationMap();
 
-		if (!getenv('OPUS_DISABLED') && $this->checkFrameworkSupport($package)) {
-			$this->loadInstallationMap();
+				$this->copyMap(
+					$this->buildPackageMap($package),
+					$result
+				);
 
-			$this->copyMap(
-				$this->buildPackageMap($package),
-				$result
-			);
+				$this->resolve($result);
+				$this->saveInstallationMap($result);
 
-			$this->resolve($result);
-			$this->saveInstallationMap($result);
+				$this->io->write(PHP_EOL);
+			}
 
-			$this->io->write(PHP_EOL);
+			return $value;
+		};
+
+		if ($promise) {
+			return $promise->then($install);
+		} else {
+			return $install();
 		}
-
-		return $promise;
-
 	}
 
 
@@ -196,68 +202,73 @@ class Processor extends LibraryInstaller
 	public function update(InstalledRepositoryInterface $repo, PackageInterface $initial, PackageInterface $target)
 	{
 		$promise = parent::update($repo, $initial, $target);
+		$update  = function ($value = NULL) use ($repo, $initial, $target) {
+			if (!getenv('OPUS_DISABLED')) {
 
-		if (!getenv('OPUS_DISABLED')) {
+				//
+				// Don't attempt to remove anything if the initial package didn't have Opus support.
+				// If it did, however, we will iterate through the installation map and remove package
+				// names which the old package handled installation for.
+				//
+				// We will then save the installation map without writing checksums, so that some paths
+				// may be completely empty arrays (i.e. have no packages handling them) and so that the
+				// checksums are still the original file checksums.
+				//
 
-			//
-			// Don't attempt to remove anything if the initial package didn't have Opus support.
-			// If it did, however, we will iterate through the installation map and remove package
-			// names which the old package handled installation for.
-			//
-			// We will then save the installation map without writing checksums, so that some paths
-			// may be completely empty arrays (i.e. have no packages handling them) and so that the
-			// checksums are still the original file checksums.
-			//
+				if ($this->checkFrameworkSupport($initial)) {
+					$this->loadInstallationMap();
 
-			if ($this->checkFrameworkSupport($initial)) {
-				$this->loadInstallationMap();
+					$old_handled_packages = array_keys($this->buildPackageMap($initial));
 
-				$old_handled_packages = array_keys($this->buildPackageMap($initial));
+					foreach ($this->installationMap as $path => $current_package_names) {
+						$this->installationMap[$path] = array_diff(
+							$current_package_names,
+							$old_handled_packages
+						);
+					}
 
-				foreach ($this->installationMap as $path => $current_package_names) {
-					$this->installationMap[$path] = array_diff(
-						$current_package_names,
-						$old_handled_packages
-					);
+					$this->saveInstallationMap();
 				}
 
+				//
+				// At this point, if the new package supports opus it will redo-copying and re-add itself
+				// to the paths it handles.  This will leave any files it no longer handles with empty
+				// arrays from previous action.  In the event of a conflict, the checksum of the
+				// destination file will be checked against the original checksums in the installation
+				// map and the user will be prompted with additional actions based on their integrity
+				// level.
+				//
+
+				if ($this->checkFrameworkSupport($target)) {
+					$this->loadInstallationMap();
+
+					$this->copyMap(
+						$this->buildPackageMap($target),
+						$result
+					);
+
+					$this->resolve($result);
+					$this->saveInstallationMap($result);
+				}
+
+				//
+				// Lastly, when the remove package has been removed from the installation map and the
+				// new package has re-added itself for any files it handles, we will run cleanup.  This
+				// will actually remove any unhandled files and directories.
+				//
+
+				$this->clean();
 				$this->saveInstallationMap();
+
+				$this->io->write(PHP_EOL);
 			}
+		};
 
-			//
-			// At this point, if the new package supports opus it will redo-copying and re-add itself
-			// to the paths it handles.  This will leave any files it no longer handles with empty
-			// arrays from previous action.  In the event of a conflict, the checksum of the
-			// destination file will be checked against the original checksums in the installation
-			// map and the user will be prompted with additional actions based on their integrity
-			// level.
-			//
-
-			if ($this->checkFrameworkSupport($target)) {
-				$this->loadInstallationMap();
-
-				$this->copyMap(
-					$this->buildPackageMap($target),
-					$result
-				);
-
-				$this->resolve($result);
-				$this->saveInstallationMap($result);
-			}
-
-			//
-			// Lastly, when the remove package has been removed from the installation map and the
-			// new package has re-added itself for any files it handles, we will run cleanup.  This
-			// will actually remove any unhandled files and directories.
-			//
-
-			$this->clean();
-			$this->saveInstallationMap();
-
-			$this->io->write(PHP_EOL);
+		if ($promise) {
+			return $promise->then($install);
+		} else {
+			return $install();
 		}
-
-		return $promise;
 	}
 
 
