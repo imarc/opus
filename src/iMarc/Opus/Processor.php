@@ -265,9 +265,9 @@ class Processor extends LibraryInstaller
 		};
 
 		if ($promise) {
-			return $promise->then($install);
+			return $promise->then($update);
 		} else {
-			return $install();
+			return $update();
 		}
 	}
 
