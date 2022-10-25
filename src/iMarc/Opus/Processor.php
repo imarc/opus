@@ -489,7 +489,10 @@ class Processor extends LibraryInstaller
 		// Sort our paths
 		//
 
-		ksort($this->installationMap['__CHECKSUMS__']);
+		if (isset($this->installationMap['__CHECKSUMS__'])) {
+			ksort($this->installationMap['__CHECKSUMS__']);
+		}
+
 		ksort($this->installationMap);
 	}
 
