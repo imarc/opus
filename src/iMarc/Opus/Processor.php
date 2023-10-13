@@ -49,6 +49,15 @@ class Processor extends LibraryInstaller
 
 
 	/**
+	 * The integrity level
+	 *
+	 * @access private
+	 * @var string
+	 */
+	private $integrity = 'medium';
+
+
+	/**
 	 * The framework as defined by our extra options
 	 *
 	 * @access private
