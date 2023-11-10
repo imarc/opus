@@ -1,8 +1,8 @@
 {
+	"type": "composer-plugin",
 	"name": "imarc/opus",
 	"description": "Multi-framework asset and module packaging for composer",
 	"keywords": ["package management"],
-	"type": "composer-plugin",
 	"license": "MIT",
 	"authors": [
 		{

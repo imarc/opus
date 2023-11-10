@@ -85,7 +85,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 *
 	 * @var string
 	 */
-	private $framework = NULL;
+	private $framework;
 
 	/**
 	 *  The opus map
@@ -99,7 +99,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 *
 	 * @var string
 	 */
-	private $mapFile = NULL;
+	private $mapFile;
 
 
 	/**
@@ -145,8 +145,10 @@ class Processor implements PluginInterface, EventSubscriberInterface
 				$this->externalMapping = $options['external-mapping'];
 			}
 
-		 } else {
-			$this->framework = $root_package->getName();
+		 }
+
+		 if (!$this->framework) {
+			 $this->framework = $root_package->getName();
 		 }
 
 		 if (getenv('OPUS_DISABLED')) {
@@ -218,7 +220,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 							break;
 
 						case 'high':
-							throw new \Exception(sprintf(
+							throw new RuntimeException(sprintf(
 								'Error removing empty directory %s',
 								$path
 							));
@@ -244,7 +246,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 							break;
 
 						case 'high':
-							throw new \Exception(sprintf(
+							throw new RuntimeException(sprintf(
 								'Error removing unused file %s, restore file or check permissions and try again',
 								$path
 							));
@@ -286,20 +288,17 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	public function pkgInstall(PackageEvent $event)
 	{
-		if (!$this->enabled) {
-			return;
-		}
-
 		/**
 		 * @var InstallOperation
 		 */
 		$operation = $event->getOperation();
 		$package   = $operation->getPackage();
-		$result    = array();
 
 		if (!$this->checkFrameworkSupport($package)) {
 			return;
 		}
+
+		$result = array();
 
 		$this->copy($package, $result);
 		$this->fix($result);
@@ -311,10 +310,6 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	public function pkgUninstall(PackageEvent $event)
 	{
-		if (!$this->enabled) {
-			return;
-		}
-
 		/**
 		 * @var UninstallOperation
 		 */
@@ -329,17 +324,12 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	public function pkgUpdate(PackageEvent $event)
 	{
-		if (!$this->enabled) {
-			return;
-		}
-
 		/**
 		 * @var UpdateOperation
 		 */
 		$operation   = $event->getOperation();
 		$cur_package = $operation->getInitialPackage();
 		$new_package = $operation->getTargetPackage();
-		$result      = array();
 
 		if (!$this->checkFrameworkSupport($cur_package)) {
 			$old_packages = array_keys($this->build($cur_package));
@@ -353,6 +343,8 @@ class Processor implements PluginInterface, EventSubscriberInterface
 		}
 
 		if ($this->checkFrameworkSupport($new_package)) {
+			$result = array();
+
 			$this->copy($new_package, $result);
 			$this->fix($result);
 		}
@@ -400,7 +392,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 			);
 
 			if (!mkdir($directory)) {
-				throw new \Exception(sprintf(
+				throw new RuntimeException(sprintf(
 					'Cannot install, failure while creating requisite directory "%s"',
 					$directory
 				));
@@ -408,14 +400,14 @@ class Processor implements PluginInterface, EventSubscriberInterface
 
 		} else {
 			if (!is_dir($directory)) {
-				throw new \Exception(sprintf(
+				throw new RuntimeException(sprintf(
 					'Cannot install, requisite path "%s" exists, but is not a directory',
 					$directory
 				));
 			}
 
 			if (!is_writable($directory)) {
-				throw new \Exception(sprintf(
+				throw new RuntimeException(sprintf(
 					'Cannot install, requisite directory "%s" is not writable',
 					$directory
 				));
@@ -449,7 +441,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 				//
 
 				if ($element != $package->getName() && !$this->externalMapping) {
-					throw new \Exception(sprintf(
+					throw new RuntimeException(sprintf(
 						'Cannot perform external mapping for %s, disabled', $element
 					));
 				}
@@ -477,7 +469,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 				$package_map[$package->getName()][$element] = $value;
 
 			} else {
-				throw new \Exception (sprintf(
+				throw new RuntimeException (sprintf(
 					'Ivalid element %s of type %s', $element, gettype($value)
 				));
 			}
@@ -560,7 +552,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 		];
 
 		if (!$src) {
-			throw new \Exception(sprintf(
+			throw new RuntimeException(sprintf(
 				'Cannot install, bad source entry while trying to install %s', $entry_name
 			));
 		}
@@ -592,7 +584,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 
 			if (file_exists($dst)) {
 				if (!is_writable($dst)) {
-					throw new \Exception(sprintf(
+					throw new RuntimeException(sprintf(
 						'Cannot install, cannot write to file at "%s"', $dst
 					));
 				}
@@ -618,7 +610,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 
 		} elseif (is_dir($src)) {
 			if (is_file($dst)) {
-				throw new \Exception(sprintf(
+				throw new RuntimeException(sprintf(
 					'Cannot copy source "%s" (directory) to "%s" (file)', $src, $dst
 				));
 			}
