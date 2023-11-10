@@ -795,7 +795,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 			$checksums[$opus_path] = $checksum;
 		}
 
-		$this->map['__CHECKSUM__'] = $checksums;
+		$this->map['__CHECKSUMS__'] = $checksums;
 
 		return TRUE;
 	}
