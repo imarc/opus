@@ -2,17 +2,19 @@
 namespace Opus;
 
 use Composer\Composer;
+use Composer\IO\IOInterface;
+use Composer\Installer\PackageEvent;
+use Composer\Plugin\PluginInterface;
+use Composer\Package\PackageInterface;
 use Composer\DependencyResolver\Operation\InstallOperation;
 use Composer\DependencyResolver\Operation\UninstallOperation;
 use Composer\DependencyResolver\Operation\UpdateOperation;
 use Composer\EventDispatcher\EventSubscriberInterface;
-use Composer\Installer\PackageEvent;
-use Composer\IO\IOInterface;
-use Composer\Package\PackageInterface;
-use Composer\Plugin\PluginInterface;
+
 use Jfcherng\Diff\Differ;
 use Jfcherng\Diff\Factory\RendererFactory;
 use Jfcherng\Diff\Renderer\RendererInterface;
+
 use RuntimeException;
 
 /**
@@ -24,16 +26,20 @@ use RuntimeException;
  */
 class Processor implements PluginInterface, EventSubscriberInterface
 {
-	const PACKAGE_TYPE = 'opus-package';
-	const NAME         = 'opus';
-	const TAB          = '    ';
+	/**
+	 * @var string
+	 */
+	const NAME = 'opus';
+
+	/**
+	 * @var string
+	 */
+	const TAB  = '    ';
 
 	/**
 	 * A list of common directory separators, including the system designated one
 	 *
-	 * @static
-	 * @access private
-	 * @var array
+	 * @var array<string>
 	 */
 	static private $separators = ['\\', '/', DIRECTORY_SEPARATOR];
 
@@ -42,12 +48,10 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	private $composer;
 
-
 	/**
 	 * @var RendererInterface
 	 */
 	private $differ;
-
 
 	/**
 	 * Check for external mapping
@@ -57,14 +61,12 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	private $externalMapping = FALSE;
 
-
 	/**
 	 * Whether or not opus support is enabled
 	 *
 	 * @var boolean
 	 */
 	private $enabled = TRUE;
-
 
 	/**
 	 * The integrity level
@@ -73,12 +75,10 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	private $integrity = 'medium';
 
-
 	/**
 	 * @var IOInterface
 	 */
 	private $interface;
-
 
 	/**
 	 * The framework as defined by our extra options
