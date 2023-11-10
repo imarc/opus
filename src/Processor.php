@@ -222,6 +222,17 @@ class Processor implements PluginInterface, EventSubscriberInterface
 		$operation = $event->getOperation();
 		$package   = $operation->getPackage();
 
+		if (!$this->checkFrameworkSupport($package)) {
+			return;
+		}
+
+		foreach ($this->map as $path => $packages) {
+			$key = array_search($package->getName(), $packages);
+
+			if ($key !== FALSE) {
+				unset($this->map[$path][$key]);
+			}
+		}
 	}
 
 
