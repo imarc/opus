@@ -701,7 +701,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 			$checksums = array();
 		}
 
-		foreach ($result['conflicts'] as $a => $b) {
+		foreach ($result['conflicts'] ?? array() as $a => $b) {
 			$base_path     = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
 			$opus_path     = str_replace($base_path, '', $b);
 			$cur_checksum  = md5(@file_get_contents($b));
@@ -787,7 +787,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 			}
 		}
 
-		foreach ($result['updates'] as $opus_path => $checksum) {
+		foreach ($result['updates'] ?? array() as $opus_path => $checksum) {
 			$checksums[$opus_path] = $checksum;
 		}
 
