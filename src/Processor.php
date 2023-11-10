@@ -431,7 +431,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 		$package_map  = array();
 		$requirements = $package->getRequires();
 		$extra        = $package->getExtra();
-		$mappings     = $extra[self::NAME][$this->framework];
+		$mappings     = $extra[self::NAME][$this->framework] ?? array();
 
 		foreach ($mappings as $element => $value) {
 			if (is_array($value)) {
