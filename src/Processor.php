@@ -207,7 +207,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 		$result = array();
 
 		$this->copy($package, $result);
-		$this->fix($result);
+		$this->graph($result);
 	}
 
 
@@ -252,7 +252,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 			$result = array();
 
 			$this->copy($new_package, $result);
-			$this->fix($result);
+			$this->graph($result);
 		}
 	}
 
@@ -680,25 +680,27 @@ class Processor implements PluginInterface, EventSubscriberInterface
 
 
 	/**
-	 * Fix any conflicts depending on integrity
+	 * Fix any conflicts depending on integrity, and store checksums
 	 */
-	private function fix(array &$result): bool
+	private function graph(array &$result): bool
 	{
 		if (!isset($result['conflicts']) || !count($result['conflicts'])) {
 			return TRUE;
 		}
 
-		$original_checksums = isset($this->map['__CHECKSUMS__'])
-			? $this->map['__CHECKSUMS__']
-			: array();
+		if (isset($this->map['__CHECKSUMS__'])) {
+			$checksums = $this->map['__CHECKSUMS__'];
+		} else {
+			$checksums = array();
+		}
 
 		foreach ($result['conflicts'] as $a => $b) {
-			$base_path        = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
-			$opus_path        = str_replace($base_path, '', $b);
-			$current_checksum = md5(@file_get_contents($b));
-			$new_checksum     = md5(@file_get_contents($a));
-			$old_checksum     = isset($original_checksums[$opus_path])
-				? $original_checksums[$opus_path]
+			$base_path     = str_replace(DIRECTORY_SEPARATOR, '/', getcwd());
+			$opus_path     = str_replace($base_path, '', $b);
+			$cur_checksum  = md5(@file_get_contents($b));
+			$new_checksum  = md5(@file_get_contents($a));
+			$old_checksum  = isset($checksums[$opus_path])
+				? $checksums[$opus_path]
 				: md5(FALSE);
 
 			switch ($this->integrity) {
@@ -720,7 +722,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 
 						break;
 
-					} elseif ($old_checksum == $current_checksum) {
+					} elseif ($old_checksum == $cur_checksum) {
 
 						//
 						// If we didn't pass the previous condition, then it means that the file
@@ -777,6 +779,12 @@ class Processor implements PluginInterface, EventSubscriberInterface
 					break;
 			}
 		}
+
+		foreach ($result['updates'] as $opus_path => $checksum) {
+			$checksums[$opus_path] = $checksum;
+		}
+
+		$this->map['__CHECKSUM__'] = $checksums;
 
 		return TRUE;
 	}
