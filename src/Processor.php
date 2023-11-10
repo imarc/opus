@@ -509,13 +509,14 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	private function copy(PackageInterface $package, array &$result = array()): void
 	{
-		$map      = $this->build($package);
-		$manager  = $this->composer->getRepositoryManager();
-		$packages = $manager->getLocalRepository()->getPackages();
+		$map       = $this->build($package);
+		$manager   = $this->composer->getRepositoryManager();
+		$installer = $this->composer->getInstallationManager();
+		$packages  = $manager->getLocalRepository()->getPackages();
 
 		foreach ($packages as $package) {
 			$name = $package->getName();
-			$root = $this->rtrim($package->getTargetDir());
+			$root = $this->rtrim($installer->getInstallPath($package));
 
 			if (!isset($map[$name])) {
 				continue;
