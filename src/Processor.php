@@ -182,6 +182,24 @@ class Processor implements PluginInterface, EventSubscriberInterface
 
 
 	/**
+	 *
+	 */
+	public function pkgUninstall(PackageEvent $event)
+	{
+
+	}
+
+
+	/**
+	 *
+	 */
+	public function pkgUpdate(PackageEvent $event)
+	{
+
+	}
+
+
+	/**
 	 * Checks whether or not our framework is supported by this opus package
 	 */
 	private function checkFrameworkSupport(PackageInterface $package): bool
