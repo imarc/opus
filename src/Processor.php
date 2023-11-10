@@ -695,10 +695,6 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	private function graph(array &$result): bool
 	{
-		if (!isset($result['conflicts']) || !count($result['conflicts'])) {
-			return TRUE;
-		}
-
 		if (isset($this->map['__CHECKSUMS__'])) {
 			$checksums = $this->map['__CHECKSUMS__'];
 		} else {
