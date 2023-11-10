@@ -17,6 +17,8 @@
 		"composer-plugin-api": "^2.0"
 	},
 	"require-dev": {
+		"phpstan/phpstan": "^1.0",
+		"phpunit/phpunit": "^10.0",
 		"composer/composer": "^2.0"
 	},
 	"autoload": {
