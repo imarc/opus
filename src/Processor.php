@@ -2,6 +2,7 @@
 namespace Opus;
 
 use Composer\Composer;
+use Composer\Script\Event;
 use Composer\IO\IOInterface;
 use Composer\Installer\PackageEvent;
 use Composer\Plugin\PluginInterface;
@@ -10,7 +11,7 @@ use Composer\DependencyResolver\Operation\InstallOperation;
 use Composer\DependencyResolver\Operation\UninstallOperation;
 use Composer\DependencyResolver\Operation\UpdateOperation;
 use Composer\EventDispatcher\EventSubscriberInterface;
-use Composer\Plugin\CommandEvent;
+
 use Jfcherng\Diff\Differ;
 use Jfcherng\Diff\Factory\RendererFactory;
 use Jfcherng\Diff\Renderer\RendererInterface;
@@ -259,7 +260,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	/**
 	 *
 	 */
-	public function write(CommandEvent $event)
+	public function write(Event $event)
 	{
 		foreach ($this->map as $path => $packages) {
 			if ($path == '__CHECKSUMS__') {
