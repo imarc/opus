@@ -678,8 +678,8 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	private function diff(string $a, string $b)
 	{
-		$a_code = file($a);
-		$b_code = file($b);
+		$a_code = file($a, FILE_IGNORE_NEW_LINES);
+		$b_code = file($b, FILE_IGNORE_NEW_LINES);
 		$diff   = new Differ($b_code, $a_code, array(
 			'ignoreWhitespace' => TRUE,
 			'ignoreNewLines'   => TRUE
