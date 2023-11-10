@@ -2,6 +2,9 @@
 namespace Opus;
 
 use Composer\Composer;
+use Composer\DependencyResolver\Operation\InstallOperation;
+use Composer\DependencyResolver\Operation\UninstallOperation;
+use Composer\DependencyResolver\Operation\UpdateOperation;
 use Composer\EventDispatcher\EventSubscriberInterface;
 use Composer\Installer\PackageEvent;
 use Composer\IO\IOInterface;
@@ -56,21 +59,11 @@ class Processor implements PluginInterface, EventSubscriberInterface
 
 
 	/**
-	 * The working installation map - tracks file copies
-	 *
-	 * @access private
-	 * @var array
-	 */
-	private $installationMap = array();
-
-
-	/**
 	 * Whether or not opus support is enabled
 	 *
-	 * @access private
 	 * @var boolean
 	 */
-	private $enabled = FALSE;
+	private $enabled = TRUE;
 
 
 	/**
@@ -84,7 +77,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	/**
 	 * @var IOInterface
 	 */
-	private $io;
+	private $interface;
 
 
 	/**
@@ -114,28 +107,51 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	static public function getSubscribedEvents(): array
 	{
-		if (!getenv('OPUS_DISABLED')) {
-			return [
-				'post-package-install'   => 'pkgInstall',
-				'post-package-uninstall' => 'pkgUnintstall',
-				'pre-package-update'     => 'pkgUpdate',
-			];
-		}
-
-		return array();
+		return [
+			'post-package-install'   => 'pkgInstall',
+			'post-package-uninstall' => 'pkgUnintstall',
+			'pre-package-update'     => 'pkgUpdate',
+		];
 	}
 
 
 	/**
 	 * Activate the installer
 	 */
-	 public function activate(Composer $composer, IOInterface $io)
+	 public function activate(Composer $composer, IOInterface $interface)
 	 {
-		$this->differ    = RendererFactory::make('Unified');
-		$this->mapFile   = getcwd() . DIRECTORY_SEPARATOR . self::NAME . '.map';
-		$this->framework = $composer->getPackage()->getName();
-		$this->composer  = $composer;
-		$this->io        = $io;
+		 $this->composer  = $composer;
+		 $this->interface = $interface;
+		 $this->differ    = RendererFactory::make('Unified');
+		 $this->mapFile   = getcwd() . DIRECTORY_SEPARATOR . self::NAME . '.map';
+		 $root_package    = $this->composer->getPackage();
+
+		 if ($config = $root_package->getExtra()[self::NAME] ?? array()) {
+			$options = $config['options'] ?? array();
+
+			if (isset($config['enabled'])) {
+				$this->enabled = $config['enabled'];
+			}
+
+			if (isset($options['framework'])) {
+				$this->framework = $options['framework'];
+			}
+
+			if (isset($options['integrity'])) {
+				$this->integrity = $options['integrity'];
+			}
+
+			if (isset($options['external-mapping'])) {
+				$this->externalMapping = $options['external-mapping'];
+			}
+
+		 } else {
+			$this->framework = $root_package->getName();
+		 }
+
+		 if (getenv('OPUS_DISABLED')) {
+			$this->enabled = FALSE;
+		 }
 
 		if (file_exists($this->mapFile)) {
 			$this->map = json_decode(file_get_contents($this->mapFile), TRUE);
@@ -150,6 +166,106 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	public function deactivate(Composer $composer, IOInterface $io)
 	{
+		foreach ($this->map as $path => $packages) {
+			if ($path == '__CHECKSUMS__') {
+				continue;
+			}
+
+			if (count($packages)) {
+				//
+				// Sort Our Package Names
+				//
+
+				sort($this->map[$path]);
+				continue;
+			}
+
+			$installation_path = $this->ltrim($path);
+			$installation_path = getcwd() . DIRECTORY_SEPARATOR . $installation_path;
+
+			if (is_dir($installation_path)) {
+
+				//
+				// Here's what to do with a directory
+				//
+
+				$children = array_merge(
+					glob($installation_path . DIRECTORY_SEPARATOR . '/*'),
+					glob($installation_path . DIRECTORY_SEPARATOR . '/.*')
+				);
+
+				//
+				// Children should be at least two (one entry for current dir and another)
+				// for parent dir.  Our install map is sorted by the length of the path
+				// so we should only be trying to remove directories which have already had
+				// other opus related/created children removed.
+				//
+
+				if (count($children) > 2) {
+					continue;
+				}
+
+				if (!@rmdir($installation_path)) {
+					switch ($this->integrity) {
+						case 'low':
+							break;
+
+						case 'medium':
+							$this->interface->write(sprintf(
+								self::TAB . 'Warning: unable to remove empty directory %s',
+								$path
+							));
+							break;
+
+						case 'high':
+							throw new \Exception(sprintf(
+								'Error removing empty directory %s',
+								$path
+							));
+					}
+				}
+
+			} else {
+
+				//
+				// Here's what to do with a file
+				//
+
+				if (!@unlink($installation_path)) {
+					switch ($this->integrity) {
+						case 'low':
+							break;
+
+						case 'medium':
+							$this->interface->write(sprintf(
+								self::TAB . 'Warning: unable to remove unused file %s; remove manually',
+								$path
+							));
+							break;
+
+						case 'high':
+							throw new \Exception(sprintf(
+								'Error removing unused file %s, restore file or check permissions and try again',
+								$path
+							));
+					}
+				}
+			}
+
+			unset($this->map[$path]);
+			unset($this->map['__CHECKSUMS__'][$path]);
+		}
+
+		//
+		// Sort our paths
+		//
+
+		if (isset($this->map['__CHECKSUMS__'])) {
+			ksort($this->map['__CHECKSUMS__']);
+		}
+
+		ksort($this->map);
+
 		file_put_contents($this->mapFile, json_encode($this->map));
 	}
 
@@ -159,7 +275,9 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	public function uninstall(Composer $composer, IOInterface $io)
 	{
-
+		//
+		// Don't ever uninstall Opus
+		//
 	}
 
 
@@ -168,9 +286,16 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	public function pkgInstall(PackageEvent $event)
 	{
-		$result  = array();
-		$package = $event->getOperation()->getPackage();
-		$repo    = $event->getLocalRepo();
+		if (!$this->enabled) {
+			return;
+		}
+
+		/**
+		 * @var InstallOperation
+		 */
+		$operation = $event->getOperation();
+		$package   = $operation->getPackage();
+		$result    = array();
 
 		if (!$this->checkFrameworkSupport($package)) {
 			return;
@@ -186,6 +311,15 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	public function pkgUninstall(PackageEvent $event)
 	{
+		if (!$this->enabled) {
+			return;
+		}
+
+		/**
+		 * @var UninstallOperation
+		 */
+		$operation = $event->getOperation();
+		$package   = $operation->getPackage();
 
 	}
 
@@ -195,7 +329,33 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	public function pkgUpdate(PackageEvent $event)
 	{
+		if (!$this->enabled) {
+			return;
+		}
 
+		/**
+		 * @var UpdateOperation
+		 */
+		$operation   = $event->getOperation();
+		$cur_package = $operation->getInitialPackage();
+		$new_package = $operation->getTargetPackage();
+		$result      = array();
+
+		if (!$this->checkFrameworkSupport($cur_package)) {
+			$old_packages = array_keys($this->build($cur_package));
+
+			foreach ($this->map as $path => $cur_packages) {
+				$this->map[$path] = array_diff(
+					$cur_packages,
+					$old_packages
+				);
+			}
+		}
+
+		if ($this->checkFrameworkSupport($new_package)) {
+			$this->copy($new_package, $result);
+			$this->fix($result);
+		}
 	}
 
 
@@ -369,7 +529,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 				continue;
 			}
 
-			$this->io->write(sprintf(
+			$this->interface->write(sprintf(
 				self::TAB . 'Copying files from %s',
 				substr($root, strlen(getcwd()))
 			));
@@ -578,12 +738,12 @@ class Processor implements PluginInterface, EventSubscriberInterface
 
 				case 'high':
 					$answer = NULL;
-					$this->io->write(
+					$this->interface->write(
 						PHP_EOL . self::TAB . 'The following conflicts were found:' . PHP_EOL
 					);
 
 					while (!$answer) {
-						$answer = $this->io->ask(sprintf(
+						$answer = $this->interface->ask(sprintf(
 							self::TAB . '- %s [o=overwrite (default), k=keep, d=diff]: ',
 							$opus_path
 						), 'o');
@@ -599,7 +759,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 								break;
 
 							case 'd':
-								$this->io->write(PHP_EOL . $this->diff($a, $b) . PHP_EOL);
+								$this->interface->write(PHP_EOL . $this->diff($a, $b) . PHP_EOL);
 							default:
 								$answer = NULL;
 								break;
