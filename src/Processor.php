@@ -10,7 +10,7 @@ use Composer\DependencyResolver\Operation\InstallOperation;
 use Composer\DependencyResolver\Operation\UninstallOperation;
 use Composer\DependencyResolver\Operation\UpdateOperation;
 use Composer\EventDispatcher\EventSubscriberInterface;
-
+use Composer\Plugin\CommandEvent;
 use Jfcherng\Diff\Differ;
 use Jfcherng\Diff\Factory\RendererFactory;
 use Jfcherng\Diff\Renderer\RendererInterface;
@@ -108,9 +108,12 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	static public function getSubscribedEvents(): array
 	{
 		return [
-			'post-package-install'   => 'pkgInstall',
-			'post-package-uninstall' => 'pkgUnintstall',
-			'pre-package-update'     => 'pkgUpdate',
+			'post-package-install'      => 'pkgInstall',
+			'post-package-uninstall'    => 'pkgUnintstall',
+			'post-package-update'       => 'pkgUpdate',
+			'post-root-package-install' => 'write',
+			'post-install-cmd'          => 'write',
+			'post-update-cmd'           => 'write',
 		];
 	}
 
@@ -167,6 +170,96 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 *
 	 */
 	public function deactivate(Composer $composer, IOInterface $io)
+	{
+		//
+		// Don't ever deactivate Opus
+		//
+	}
+
+
+	/**
+	 *
+	 */
+	public function uninstall(Composer $composer, IOInterface $io)
+	{
+		//
+		// Don't ever uninstall Opus
+		//
+	}
+
+
+	/**
+	 *
+	 */
+	public function pkgInstall(PackageEvent $event)
+	{
+		/**
+		 * @var InstallOperation
+		 */
+		$operation = $event->getOperation();
+		$package   = $operation->getPackage();
+
+		if (!$this->checkFrameworkSupport($package)) {
+			return;
+		}
+
+		$result = array();
+
+		$this->copy($package, $result);
+		$this->fix($result);
+	}
+
+
+	/**
+	 *
+	 */
+	public function pkgUninstall(PackageEvent $event)
+	{
+		/**
+		 * @var UninstallOperation
+		 */
+		$operation = $event->getOperation();
+		$package   = $operation->getPackage();
+
+	}
+
+
+	/**
+	 *
+	 */
+	public function pkgUpdate(PackageEvent $event)
+	{
+		/**
+		 * @var UpdateOperation
+		 */
+		$operation   = $event->getOperation();
+		$cur_package = $operation->getInitialPackage();
+		$new_package = $operation->getTargetPackage();
+
+		if (!$this->checkFrameworkSupport($cur_package)) {
+			$old_packages = array_keys($this->build($cur_package));
+
+			foreach ($this->map as $path => $cur_packages) {
+				$this->map[$path] = array_diff(
+					$cur_packages,
+					$old_packages
+				);
+			}
+		}
+
+		if ($this->checkFrameworkSupport($new_package)) {
+			$result = array();
+
+			$this->copy($new_package, $result);
+			$this->fix($result);
+		}
+	}
+
+
+	/**
+	 *
+	 */
+	public function write(CommandEvent $event)
 	{
 		foreach ($this->map as $path => $packages) {
 			if ($path == '__CHECKSUMS__') {
@@ -269,85 +362,6 @@ class Processor implements PluginInterface, EventSubscriberInterface
 		ksort($this->map);
 
 		file_put_contents($this->mapFile, json_encode($this->map));
-	}
-
-
-	/**
-	 *
-	 */
-	public function uninstall(Composer $composer, IOInterface $io)
-	{
-		//
-		// Don't ever uninstall Opus
-		//
-	}
-
-
-	/**
-	 *
-	 */
-	public function pkgInstall(PackageEvent $event)
-	{
-		/**
-		 * @var InstallOperation
-		 */
-		$operation = $event->getOperation();
-		$package   = $operation->getPackage();
-
-		if (!$this->checkFrameworkSupport($package)) {
-			return;
-		}
-
-		$result = array();
-
-		$this->copy($package, $result);
-		$this->fix($result);
-	}
-
-
-	/**
-	 *
-	 */
-	public function pkgUninstall(PackageEvent $event)
-	{
-		/**
-		 * @var UninstallOperation
-		 */
-		$operation = $event->getOperation();
-		$package   = $operation->getPackage();
-
-	}
-
-
-	/**
-	 *
-	 */
-	public function pkgUpdate(PackageEvent $event)
-	{
-		/**
-		 * @var UpdateOperation
-		 */
-		$operation   = $event->getOperation();
-		$cur_package = $operation->getInitialPackage();
-		$new_package = $operation->getTargetPackage();
-
-		if (!$this->checkFrameworkSupport($cur_package)) {
-			$old_packages = array_keys($this->build($cur_package));
-
-			foreach ($this->map as $path => $cur_packages) {
-				$this->map[$path] = array_diff(
-					$cur_packages,
-					$old_packages
-				);
-			}
-		}
-
-		if ($this->checkFrameworkSupport($new_package)) {
-			$result = array();
-
-			$this->copy($new_package, $result);
-			$this->fix($result);
-		}
 	}
 
 
