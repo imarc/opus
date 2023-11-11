@@ -439,7 +439,9 @@ class Processor implements PluginInterface, EventSubscriberInterface
 			}
 		}
 
-		$this->commit($directory, $entry_name);
+		if ($directory) {
+			$this->commit($directory, $entry_name);
+		}
 	}
 
 
