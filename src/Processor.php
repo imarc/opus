@@ -271,6 +271,8 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	public function write(Event $event): void
 	{
+		krsort($this->map);
+
 		foreach ($this->map as $path => $packages) {
 			if ($path == '__CHECKSUMS__') {
 				continue;
@@ -371,6 +373,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 
 		ksort($this->map);
 
+
 		file_put_contents($this->mapFile, json_encode($this->map));
 	}
 
@@ -437,7 +440,9 @@ class Processor implements PluginInterface, EventSubscriberInterface
 			}
 		}
 
-		$this->commit($directory, $entry_name);
+		if ($directory != getcwd()) {
+			$this->commit($directory, $entry_name);
+		}
 	}
 
 
