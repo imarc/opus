@@ -110,7 +110,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	{
 		return [
 			'post-package-install'      => 'pkgInstall',
-			'post-package-uninstall'    => 'pkgUnintstall',
+			'post-package-uninstall'    => 'pkgUninstall',
 			'post-package-update'       => 'pkgUpdate',
 			'post-root-package-install' => 'write',
 			'post-install-cmd'          => 'write',
@@ -439,9 +439,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 			}
 		}
 
-		if ($directory) {
-			$this->commit($directory, $entry_name);
-		}
+		$this->commit($directory, $entry_name);
 	}
 
 
