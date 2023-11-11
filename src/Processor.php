@@ -112,9 +112,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 			'post-package-install'      => 'pkgInstall',
 			'post-package-uninstall'    => 'pkgUninstall',
 			'post-package-update'       => 'pkgUpdate',
-			'post-root-package-install' => 'write',
-			'post-install-cmd'          => 'write',
-			'post-update-cmd'           => 'write',
+			'pre-autoload-dump'         => 'write',
 		];
 	}
 
