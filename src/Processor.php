@@ -657,6 +657,8 @@ class Processor implements PluginInterface, EventSubscriberInterface
 				$dst_dir .= DIRECTORY_SEPARATOR . pathinfo($src, PATHINFO_BASENAME);
 			}
 
+			$this->createDirectory($dst_dir, $entry_name);
+
 			foreach (glob($src . DIRECTORY_SEPARATOR . '{,.}*[!.]', GLOB_BRACE) ?: array() as $path) {
 				$result = array_replace_recursive(
 					$this->copyFiles(
