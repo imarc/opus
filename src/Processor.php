@@ -93,7 +93,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 *
 	 * @var array<string, array<string>|array<string, string>>
 	 */
-	private $map = array();
+	private $map = [];
 
 	/**
 	 * The map file we read/write from/to
@@ -128,8 +128,8 @@ class Processor implements PluginInterface, EventSubscriberInterface
 		 $this->mapFile   = getcwd() . DIRECTORY_SEPARATOR . self::NAME . '.map';
 		 $root_package    = $this->composer->getPackage();
 
-		 if ($config = $root_package->getExtra()[self::NAME] ?? array()) {
-			$options = $config['options'] ?? array();
+		 if ($config = $root_package->getExtra()[self::NAME] ?? []) {
+			$options = $config['options'] ?? [];
 
 			if (isset($config['enabled'])) {
 				$this->enabled = $config['enabled'];
@@ -160,7 +160,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 		if (file_exists($this->mapFile)) {
 			$this->map = json_decode(file_get_contents($this->mapFile) ?: '[]', TRUE);
 		} else {
-			$this->map = array();
+			$this->map = [];
 		}
 	 }
 
@@ -202,7 +202,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 			return;
 		}
 
-		$result = array();
+		$result = [];
 
 		$this->copy($package, $result);
 		$this->graph($result);
@@ -258,7 +258,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 		}
 
 		if ($this->checkFrameworkSupport($new_package)) {
-			$result = array();
+			$result = [];
 
 			$this->copy($new_package, $result);
 			$this->graph($result);
@@ -297,8 +297,8 @@ class Processor implements PluginInterface, EventSubscriberInterface
 				//
 
 				$children = array_merge(
-					glob($installation_path . DIRECTORY_SEPARATOR . '/*') ?: array(),
-					glob($installation_path . DIRECTORY_SEPARATOR . '/.*') ?: array()
+					glob($installation_path . DIRECTORY_SEPARATOR . '/*') ?: [],
+					glob($installation_path . DIRECTORY_SEPARATOR . '/.*') ?: []
 				);
 
 				//
@@ -405,7 +405,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 * @param string $entry_name The entry name to map under
 	 * @return void
 	 */
-	private function createDirectory(string $directory, string $entry_name = NULL)
+	private function createDirectory(string $directory, ?string $entry_name = NULL)
 	{
 		$directory = str_replace(DIRECTORY_SEPARATOR, '/', $directory);
 		$directory = str_replace('\\', '/', $directory);
@@ -458,10 +458,10 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	private function build(PackageInterface $package): array
 	{
-		$package_map  = array();
+		$package_map  = [];
 		$requirements = $package->getRequires();
 		$extra        = $package->getExtra();
-		$mappings     = $extra[self::NAME][$this->framework] ?? array();
+		$mappings     = $extra[self::NAME][$this->framework] ?? [];
 
 		foreach ($mappings as $element => $value) {
 			if (is_array($value)) {
@@ -476,9 +476,9 @@ class Processor implements PluginInterface, EventSubscriberInterface
 					));
 				}
 
-				if (strpos($element, '*') !== FALSE) {
+				if (str_contains($element, '*')) {
 					$parts   = explode('*', $element);
-					$parts   = array_map(function($v) { return preg_quote($v, '#'); }, $parts);
+					$parts   = array_map(fn($v) => preg_quote($v, '#'), $parts);
 					$element = implode('(.*)', $parts);
 				}
 
@@ -493,7 +493,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 			} elseif (is_string($value)) {
 
 				if (!isset($package_map[$package->getName()])) {
-					$package_map[$package->getName()] = array();
+					$package_map[$package->getName()] = [];
 				}
 
 				$package_map[$package->getName()][$element] = $value;
@@ -518,7 +518,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 		$opus_path = str_replace($base_path, '', $dst);
 
 		if (!isset($this->map[$opus_path])) {
-			$this->map[$opus_path] = array();
+			$this->map[$opus_path] = [];
 		}
 
 		if (!in_array($entry_name, $this->map[$opus_path])) {
@@ -537,9 +537,10 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	/**
 	 * Copies files over from a package map
 	 *
-	 * @param array<empty> $result
+	 * @param array<string, array<string>> $result
+	 * @param-out array<string, array<string>> $result
 	 */
-	private function copy(PackageInterface $package, array &$result = array()): void
+	private function copy(PackageInterface $package, array &$result = []): void
 	{
 		$map       = $this->build($package);
 		$manager   = $this->composer->getRepositoryManager();
@@ -583,8 +584,8 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	{
 		$src    = $this->rtrim(realpath($src) ?: '');
 		$result = [
-			'updates'   => array(),
-			'conflicts' => array(),
+			'updates'   => [],
+			'conflicts' => [],
 		];
 
 		if (!$src) {
@@ -659,7 +660,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 
 			$this->createDirectory($dst_dir, $entry_name);
 
-			foreach (glob($src . DIRECTORY_SEPARATOR . '{,.}*[!.]', GLOB_BRACE) ?: array() as $path) {
+			foreach (glob($src . DIRECTORY_SEPARATOR . '{,.}*[!.]', GLOB_BRACE) ?: [] as $path) {
 				$result = array_replace_recursive(
 					$this->copyFiles(
 						realpath($path) ?: '',
@@ -687,12 +688,12 @@ class Processor implements PluginInterface, EventSubscriberInterface
 	 */
 	private function diff(string $a, string $b)
 	{
-		$a_code = file($a, FILE_IGNORE_NEW_LINES) ?: array();
-		$b_code = file($b, FILE_IGNORE_NEW_LINES) ?: array();
-		$diff   = new Differ($b_code, $a_code, array(
+		$a_code = file($a, FILE_IGNORE_NEW_LINES) ?: [];
+		$b_code = file($b, FILE_IGNORE_NEW_LINES) ?: [];
+		$diff   = new Differ($b_code, $a_code, [
 			'ignoreWhitespace' => TRUE,
 			'ignoreNewLines'   => TRUE
-		));
+		]);
 
 		return $this->differ->render($diff);
 	}
@@ -709,17 +710,15 @@ class Processor implements PluginInterface, EventSubscriberInterface
 		if (isset($this->map['__CHECKSUMS__'])) {
 			$checksums = $this->map['__CHECKSUMS__'];
 		} else {
-			$checksums = array();
+			$checksums = [];
 		}
 
-		foreach ($result['conflicts'] ?? array() as $a => $b) {
+		foreach ($result['conflicts'] ?? [] as $a => $b) {
 			$base_path     = str_replace(DIRECTORY_SEPARATOR, '/', getcwd() ?: '');
 			$opus_path     = str_replace($base_path, '', $b);
 			$cur_checksum  = md5(@file_get_contents($b) ?: '');
 			$new_checksum  = md5(@file_get_contents($a) ?: '');
-			$old_checksum  = isset($checksums[$opus_path])
-				? $checksums[$opus_path]
-				: md5('');
+			$old_checksum  = $checksums[$opus_path] ?? md5('');
 
 			switch ($this->integrity) {
 				case 'low':
@@ -798,7 +797,7 @@ class Processor implements PluginInterface, EventSubscriberInterface
 			}
 		}
 
-		foreach ($result['updates'] ?? array() as $opus_path => $checksum) {
+		foreach ($result['updates'] ?? [] as $opus_path => $checksum) {
 			$checksums[$opus_path] = $checksum;
 		}
 

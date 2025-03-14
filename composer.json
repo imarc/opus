@@ -12,13 +12,13 @@
 		}
 	],
 	"require": {
-		"php": ">=7.4.0",
+		"php": "^7.2|^8.0",
 		"jfcherng/php-diff": "^6.0",
 		"composer-plugin-api": "^2.0"
 	},
 	"require-dev": {
 		"phpstan/phpstan": "^1.0",
-		"phpunit/phpunit": "^10.0",
+		"phpunit/phpunit": "^8.0",
 		"composer/composer": "^2.0"
 	},
 	"autoload": {
